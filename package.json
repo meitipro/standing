@@ -8,7 +8,8 @@
     "start": "next start -p 3200",
     "lint": "next lint",
     "deploy": "node scripts/deploy.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "tx": "node scripts/tx.mjs"
   },
   "dependencies": {
     "genlayer-js": "^1.2.0",
