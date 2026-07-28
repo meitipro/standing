@@ -18,11 +18,29 @@ import { testnetBradbury } from "genlayer-js/chains";
 
 const EXPLORER = testnetBradbury.blockExplorers.default.url;
 
-/** An empty args object is the single most likely reason a deploy errored. */
-function shownArgsEmpty(args) {
-  if (args === undefined || args === null) return false;
-  if (Array.isArray(args)) return args.length === 0;
-  return typeof args === "object" && Object.keys(args).length === 0;
+/**
+ * The calldata decoder returns Maps, and JSON.stringify(new Map()) is "{}"
+ * no matter what the Map holds. Printing args through JSON therefore reported
+ * a deploy that carried [0.4 GEN, 6000] as having sent nothing at all, and a
+ * Studio deploy that sent [0, 0] the same way — two different failures, one
+ * of them not a failure, all displayed identically. Render Maps by hand.
+ */
+function showArgs(value) {
+  if (value === undefined || value === null) return "(none)";
+  if (value instanceof Map) {
+    const parts = [...value.entries()].map(([k, v]) => `${k}: ${showArgs(v)}`);
+    return `{ ${parts.join(", ")} }`;
+  }
+  if (Array.isArray(value)) return `[${value.map(showArgs).join(", ")}]`;
+  if (typeof value === "bigint") return value.toString();
+  return JSON.stringify(value);
+}
+
+/** Zeroed args are the Studio's signature: fields left empty go out as 0, 0. */
+function argsLookZeroed(value) {
+  if (value instanceof Map) return [...value.values()].every(argsLookZeroed);
+  if (Array.isArray(value)) return value.length > 0 && value.every(argsLookZeroed);
+  return value === 0n || value === 0;
 }
 
 const hash = process.argv[2];
@@ -63,10 +81,7 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
       console.log(`  consensus   ${consensus} / ${tx?.resultName ?? "?"}`);
       console.log(`  execution   ${execution || "(not reported yet)"}`);
       if (address) console.log(`  address     ${address}`);
-      if (args !== undefined) {
-        const shown = JSON.stringify(args);
-        console.log(`  args        ${shown === "{}" ? "{}  <- none were sent" : shown}`);
-      }
+      if (args !== undefined) console.log(`  args        ${showArgs(args)}`);
       console.log("");
 
       if (failed) {
@@ -75,11 +90,12 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
         console.log("  Consensus succeeded — the validators agreed with each other");
         console.log("  that running it raised an error — so nothing was created at");
         console.log("  that address. Nothing to salvage; deploy again.");
-        if (shownArgsEmpty(args)) {
+        if (argsLookZeroed(args)) {
           console.log("");
-          console.log("  Constructor arguments were empty. This contract requires");
-          console.log("  fee and overlap_bps, so __init__ could not run at all.");
-          console.log("  npm run deploy passes both, and prints the address.");
+          console.log("  Constructor arguments went out as zeros — the Studio sends");
+          console.log("  0 for every field left empty, and overlap_bps=0 is below");
+          console.log("  the 3000 floor, so __init__ refused it.");
+          console.log("  npm run deploy passes the real values, and prints the address.");
         }
         console.log("");
         console.log(`  ${EXPLORER}tx/${hash}`);
