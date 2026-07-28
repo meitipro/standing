@@ -24,8 +24,28 @@ export const STANDING = (process.env.NEXT_PUBLIC_STANDING_ADDRESS ||
 
 export const IS_LIVE = STANDING.length > 0;
 
+/* Resolution order, and each step earns its place.
+ *
+ * An explicit NEXT_PUBLIC_ORIGIN always wins, so a real domain can be pinned
+ * once there is one. Failing that, Vercel hands every build its own production
+ * domain, which is what lets a first deploy produce correct citations and open
+ * graph cards with nothing configured at all — and this origin is not
+ * cosmetic, it is the url printed inside every citation somebody pastes into
+ * an article. The literal is the last resort, for local runs.
+ *
+ * The NEXT_PUBLIC_ prefixed copy of the Vercel variable is deliberate: this
+ * module is imported by client components, and the bare
+ * VERCEL_PROJECT_PRODUCTION_URL is server only, so it would inline as undefined
+ * in the browser bundle and silently fall through to the literal.
+ */
+const VERCEL_PRODUCTION_URL =
+  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
+
 export const ORIGIN =
-  process.env.NEXT_PUBLIC_ORIGIN || "https://standing.wtf";
+  process.env.NEXT_PUBLIC_ORIGIN ||
+  (VERCEL_PRODUCTION_URL
+    ? `https://${VERCEL_PRODUCTION_URL}`
+    : "https://standing.wtf");
 
 const BRADBURY = {
   chainIdHex: `0x${testnetBradbury.id.toString(16)}`, // 4221
