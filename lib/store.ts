@@ -74,11 +74,41 @@ async function read(functionName: string, args: any[] = []): Promise<any> {
   return client.readContract({ address: STANDING, functionName, args });
 }
 
+/**
+ * A read that must not take the page down with it.
+ *
+ * Every screen is a server component, so an unhandled throw in here is a 500 on
+ * the whole route rather than one missing list. A node that is briefly
+ * unreachable should cost a visitor an empty page, not an error page.
+ *
+ * It is logged rather than swallowed, because "no certificates yet" and "cannot
+ * reach the chain" look identical from the outside and only one of them is
+ * normal. On a fresh deployment the first is expected; if the log says
+ * otherwise, the contract address is wrong.
+ */
+async function safely<T>(
+  what: string,
+  fallback: T,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    console.error(
+      `standing: chain read failed (${what}) at ${STANDING || "<no address>"}:`,
+      e instanceof Error ? e.message : e,
+    );
+    return fallback;
+  }
+}
+
 /* ---------- certificates ---------- */
 
 export async function totalCerts(): Promise<number> {
   if (!IS_LIVE) return SEED_CERTS.length;
-  return cached("total", async () => toNum(await read("total_certs")));
+  return cached("total", () =>
+    safely("total_certs", 0, async () => toNum(await read("total_certs"))),
+  );
 }
 
 export async function getCertificate(id: number): Promise<Certificate | null> {
@@ -95,31 +125,33 @@ export async function getCertificate(id: number): Promise<Certificate | null> {
 /** Newest first, which is the only order any screen asks for. */
 export async function listCertificates(limit = 20): Promise<Certificate[]> {
   if (!IS_LIVE) return [...SEED_CERTS].reverse().slice(0, limit);
-  return cached(`list:${limit}`, async () => {
-    const total = toNum(await read("total_certs"));
-    const ids: number[] = [];
-    for (let i = total - 1; i >= 0 && ids.length < limit; i--) ids.push(i);
-    const out = await Promise.all(
-      ids.map(async (i) => {
-        try {
-          return mapCert(await read("certificate", [i]), i);
-        } catch {
-          return null;
-        }
-      })
-    );
-    return out.filter((c): c is Certificate => c !== null);
-  });
+  return cached(`list:${limit}`, () =>
+    safely(`certificate list (${limit})`, [] as Certificate[], async () => {
+      const total = toNum(await read("total_certs"));
+      const ids: number[] = [];
+      for (let i = total - 1; i >= 0 && ids.length < limit; i--) ids.push(i);
+      const out = await Promise.all(
+        ids.map(async (i) => {
+          try {
+            return mapCert(await read("certificate", [i]), i);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return out.filter((c): c is Certificate => c !== null);
+    }),
+  );
 }
 
 export async function getCertificateByDigest(
-  digest: string
+  digest: string,
 ): Promise<Certificate | null> {
   const needle = digest.trim().toLowerCase();
   if (!IS_LIVE) {
     return (
       SEED_CERTS.find(
-        (c) => c.textDigest === needle || c.shotDigest === needle
+        (c) => c.textDigest === needle || c.shotDigest === needle,
       ) ?? null
     );
   }
@@ -139,26 +171,30 @@ export async function getCertificateByDigest(
 /** Every capture of the same url, oldest first. Drives the "changed since" line. */
 export async function historyForUrl(url: string): Promise<Certificate[]> {
   const all = IS_LIVE ? await listCertificates(200) : SEED_CERTS;
-  return all.filter((c) => c.url === url).sort((a, b) => a.at.localeCompare(b.at));
+  return all
+    .filter((c) => c.url === url)
+    .sort((a, b) => a.at.localeCompare(b.at));
 }
 
 /* ---------- watches ---------- */
 
 export async function listWatches(): Promise<WatchRecord[]> {
   if (!IS_LIVE) return SEED_WATCHES;
-  return cached("watches", async () => {
-    const total = toNum(await read("total_watches"));
-    const out = await Promise.all(
-      Array.from({ length: total }, async (_, i) => {
-        try {
-          return mapWatch(await read("watch_record", [i]), i);
-        } catch {
-          return null;
-        }
-      })
-    );
-    return out.filter((w): w is WatchRecord => w !== null);
-  });
+  return cached("watches", () =>
+    safely("watch list", [] as WatchRecord[], async () => {
+      const total = toNum(await read("total_watches"));
+      const out = await Promise.all(
+        Array.from({ length: total }, async (_, i) => {
+          try {
+            return mapWatch(await read("watch_record", [i]), i);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return out.filter((w): w is WatchRecord => w !== null);
+    }),
+  );
 }
 
 export async function getWatch(id: number): Promise<WatchRecord | null> {
