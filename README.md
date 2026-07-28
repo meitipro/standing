@@ -181,4 +181,3 @@ status is an indexer job.
 
 **A measured median capture time.** The home page says "~40s typical", not a
 median, because nothing has been measured yet.
-# standing
