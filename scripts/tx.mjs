@@ -18,6 +18,13 @@ import { testnetBradbury } from "genlayer-js/chains";
 
 const EXPLORER = testnetBradbury.blockExplorers.default.url;
 
+/** An empty args object is the single most likely reason a deploy errored. */
+function shownArgsEmpty(args) {
+  if (args === undefined || args === null) return false;
+  if (Array.isArray(args)) return args.length === 0;
+  return typeof args === "object" && Object.keys(args).length === 0;
+}
+
 const hash = process.argv[2];
 
 if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
@@ -36,39 +43,54 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
       console.error(`\n  No transaction found with hash ${hash}\n`);
       process.exitCode = 1;
     } else {
-      /* The address turns up under different keys depending on how far along
-       * the transaction is and which shape the node returns, so every place it
-       * has been seen is checked rather than assuming one. */
-      const address =
-        tx?.data?.contract_address ??
-        tx?.contract_address ??
-        tx?.result?.contract_address ??
-        tx?.data?.deployed_contract_address ??
-        null;
+      const decoded = tx?.txDataDecoded ?? {};
+      const address = decoded.contractAddress ?? tx?.recipient ?? null;
+      const args = decoded.constructorArgs;
 
-      const status = tx?.status ?? tx?.consensus_status ?? "unknown";
+      /* Consensus and execution are two different verdicts and the difference
+       * is the whole point of this script. A deployment can be ACCEPTED with
+       * every validator in AGREE — agreeing that the constructor threw. Reading
+       * only the consensus status says "success" about a contract that does not
+       * exist. */
+      const consensus = tx?.statusName ?? tx?.status ?? "unknown";
+      const execution = tx?.txExecutionResultName ?? "";
+      const failed = /ERROR/i.test(execution);
 
       console.log("");
       console.log(`  hash        ${hash}`);
-      console.log(`  status      ${status}`);
-      console.log(`  type        ${tx?.type ?? "?"}`);
-      console.log(`  from        ${tx?.from_address ?? tx?.from ?? "?"}`);
+      console.log(`  type        ${decoded.type ?? "?"}`);
+      console.log(`  from        ${tx?.sender ?? "?"}`);
+      console.log(`  consensus   ${consensus} / ${tx?.resultName ?? "?"}`);
+      console.log(`  execution   ${execution || "(not reported yet)"}`);
+      if (address) console.log(`  address     ${address}`);
+      if (args !== undefined) {
+        const shown = JSON.stringify(args);
+        console.log(`  args        ${shown === "{}" ? "{}  <- none were sent" : shown}`);
+      }
       console.log("");
 
-      if (address) {
-        console.log("  contract address");
-        console.log(`  ${address}`);
+      if (failed) {
+        console.log("  The deployment FAILED.");
         console.log("");
-        console.log("  Confirm it really is Standing before using it:");
+        console.log("  Consensus succeeded — the validators agreed with each other");
+        console.log("  that running it raised an error — so nothing was created at");
+        console.log("  that address. Nothing to salvage; deploy again.");
+        if (shownArgsEmpty(args)) {
+          console.log("");
+          console.log("  Constructor arguments were empty. This contract requires");
+          console.log("  fee and overlap_bps, so __init__ could not run at all.");
+          console.log("  npm run deploy passes both, and prints the address.");
+        }
+        console.log("");
+        console.log(`  ${EXPLORER}tx/${hash}`);
+        console.log("");
+        process.exitCode = 1;
+      } else if (address && /FINISHED/i.test(execution)) {
+        console.log("  Deployed. Confirm it really is Standing before using it:");
         console.log(`  npm run check -- ${address}`);
         console.log("");
       } else {
-        console.log("  No contract address on this transaction yet.");
-        console.log("");
-        console.log("  If the status is still committing or activated, consensus");
-        console.log("  has not finished and there is nothing to read yet — wait");
-        console.log("  and run this again. If it is finalized and there is still");
-        console.log("  no address, the deployment did not produce a contract.");
+        console.log("  Consensus has not finished yet — wait and run this again.");
         console.log("");
         console.log(`  ${EXPLORER}tx/${hash}`);
         console.log("");
