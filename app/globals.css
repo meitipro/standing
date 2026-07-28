@@ -1,0 +1,1346 @@
+/* Standing — brand, chapter 07.
+ *
+ * Rebuilt from the Claude Design handoff ("Standing Site.dc.html").
+ *
+ * Three typefaces, each with a job it never leaves: Instrument Serif for the
+ * few sentences the product wants read as a statement, IBM Plex Mono for
+ * anything that is evidence, Archivo for everything that is explanation. A
+ * reader should be able to tell a fact from a paragraph about a fact without
+ * reading either.
+ *
+ * One accent, still spoken for by exactly three things: the primary action,
+ * the verified state, and the mark.
+ *
+ * Everything is drawn with one border weight and a 2px radius. Depth, where it
+ * exists at all, is a hard offset shadow rather than a blur — the surfaces are
+ * meant to read as stamped paper, not as glass.
+ */
+
+:root {
+  --bg: #f3f0e8;
+  --panel: #fbf9f4;
+  --ink: #17160f;
+  --line: #ddd6c6;
+  --muted: #6d6759;
+
+  --accent: #4a37c8;
+  --accent-soft: #ece9fb;
+  --accent-bright: #8d7dfb;
+  --on-accent: #fbf9f4;
+
+  --flag: #a8391b;
+  --flag-soft: #f7e9e4;
+  /* The flag, lifted enough to survive on the slab. The ink-dark red reads as
+   * brown at 12px on a near-black card, and the cloaking flag is the one thing
+   * on a share card that must never be missed. */
+  --flag-bright: #e8825f;
+
+  /* The inverted surface: footer, code, table headers, the share card. */
+  --slab: #17160f;
+  --slab-ink: #f3f0e8;
+  --slab-muted: #a89f8a;
+  --slab-line: #3a382c;
+
+  --shadow: rgba(23, 22, 15, 0.09);
+
+  --sans: var(--font-archivo), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+  --serif: var(--font-instrument), Georgia, "Times New Roman", serif;
+
+  --shell: 1140px;
+  --pad: 32px;
+  --radius: 2px;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #12120e;
+  --panel: #1a1a14;
+  --ink: #eae7dc;
+  --line: #302f27;
+  --muted: #948f7e;
+
+  --accent: #9b8cff;
+  --accent-soft: #221f3d;
+  --accent-bright: #9b8cff;
+  --on-accent: #12120e;
+
+  --flag: #e8825f;
+  --flag-soft: #33201a;
+  --flag-bright: #e8825f;
+
+  --slab: #080805;
+  --slab-ink: #eae7dc;
+  --slab-muted: #948f7e;
+  --slab-line: #26251e;
+
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--bg);
+  transition: background-color 0.25s ease;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- shell ----------
+ *
+ * The whole site sits in one ruled column. The left and right borders run the
+ * full height of the page, which is what makes every section below read as a
+ * row of the same ledger rather than as a stack of unrelated cards.
+ */
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.pad {
+  padding-left: var(--pad);
+  padding-right: var(--pad);
+}
+
+.site {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.site > .shell {
+  flex: 1;
+}
+
+.band {
+  border-top: 1px solid var(--line);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.split > * + * {
+  border-top: 1px solid var(--line);
+}
+
+/* Once the columns sit side by side the divider has to be vertical instead. */
+@media (min-width: 700px) {
+  .split > * + * {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+}
+
+/* Ruled-paper backdrop for the hero. Purely decorative, so it is dropped for
+ * anyone who has asked for less motion or contrast noise. */
+.ruled {
+  background-image: linear-gradient(var(--line) 1px, transparent 1px);
+  background-size: 100% 34px;
+  background-position: 0 76px;
+}
+
+/* ---------- legacy wrapper, still used by the prose routes ---------- */
+
+.wrap {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--pad);
+}
+
+.section {
+  padding: 56px 0;
+}
+
+.section-tight {
+  padding: 36px 0;
+}
+
+/* ---------- type ---------- */
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.eyebrow-accent {
+  color: var(--accent);
+}
+
+.display {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(52px, 6.2vw, 88px);
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.serif {
+  font-family: var(--serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(34px, 4.4vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.h3 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 14px;
+}
+
+.tiny {
+  font-size: 12px;
+}
+
+.pretty {
+  text-wrap: pretty;
+}
+
+.break {
+  word-break: break-all;
+}
+
+/* The moment, which is the whole product. Nothing else on the site is
+ * allowed to be this large. */
+.stamp {
+  font-family: var(--mono);
+  font-size: clamp(48px, 9vw, 124px);
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  display: block;
+}
+
+.stamp-time {
+  color: var(--accent);
+}
+
+.stamp-zone {
+  font-size: clamp(18px, 2.4vw, 34px);
+  color: var(--muted);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- surfaces ---------- */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.card {
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.slab {
+  background: var(--slab);
+  color: var(--slab-ink);
+}
+
+.slab a {
+  color: var(--slab-muted);
+}
+
+.slab a:hover {
+  color: var(--slab-ink);
+}
+
+.shadow-hard {
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.shadow-soft {
+  box-shadow: 8px 8px 0 var(--shadow);
+}
+
+.rule {
+  height: 1px;
+  background: var(--line);
+  border: 0;
+  margin: 0;
+}
+
+/* ---------- controls ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.btn-slab {
+  background: var(--slab);
+  border-color: var(--slab);
+  color: var(--slab-ink);
+}
+
+.btn-slab:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--flag);
+  color: var(--flag);
+  background: transparent;
+}
+
+/* The url field. The offset shadow is the one place the product raises its
+ * voice, because pasting a url is the only thing a first visit has to do. */
+.field {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.field .prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+  padding: 14px 12px;
+}
+
+.field input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.field button {
+  border: 0;
+  border-left: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0 22px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.field button:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.field button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input.text,
+select.text {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+  outline: 0;
+}
+
+input.text:focus,
+select.text:focus {
+  border-color: var(--accent);
+}
+
+.lbl {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* ---------- tags ---------- */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  white-space: nowrap;
+}
+
+.tag-ink {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.tag-ok {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tag-flag {
+  color: var(--flag);
+  border-color: var(--flag);
+  background: var(--flag-soft);
+}
+
+/* Dashed means "not settled yet" — provisional records, and the one digest no
+ * validator re-derived. */
+.tag-prov {
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+/* ---------- stat strip ---------- */
+
+.stats {
+  display: flex;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.stat {
+  flex: 1 1 140px;
+  padding: 16px 18px;
+  border-right: 1px solid var(--line);
+}
+
+.stat:last-child {
+  border-right: 0;
+}
+
+.stat .n {
+  display: block;
+  font-family: var(--mono);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.stat .n small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stat .k {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ---------- key / value ---------- */
+
+.kv {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 10px 24px;
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.kv dt {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+
+.kv dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+/* A row of the on-chain record: label left, value right, one rule between. */
+.rec {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.rec-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.rec-row:last-child {
+  border-bottom: 0;
+}
+
+.rec-row .k {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-top: 1px;
+}
+
+.rec-row .v {
+  text-align: right;
+  word-break: break-all;
+}
+
+.rec-digest {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rec-digest-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rec-digest-head .k {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rec-digest .hash {
+  font-family: var(--mono);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.rec-note {
+  padding: 12px 14px;
+  background: var(--panel);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* ---------- tables ---------- */
+
+.scroll-x {
+  overflow-x: auto;
+}
+
+.scroll-x > .table {
+  min-width: 560px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slab-ink);
+  background: var(--slab);
+  font-weight: 400;
+  padding: 10px 16px;
+}
+
+.table td {
+  padding: 11px 16px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.table tbody tr:nth-child(even) {
+  background: var(--panel);
+}
+
+.table tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+/* Deliberately does not clip with overflow:hidden — it is worn together with
+ * .scroll-x, and hidden would win and kill the sideways scroll a six column
+ * table needs on a phone. At a 2px radius there is nothing to clip anyway. */
+.table-framed {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* ---------- claims ---------- */
+
+.claims {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: claim;
+  display: flex;
+  flex-direction: column;
+}
+
+.claims li {
+  counter-increment: claim;
+  display: flex;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  font-size: 18px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.claims li::before {
+  content: counter(claim, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  padding-top: 6px;
+  flex: none;
+  width: 22px;
+}
+
+.claims-dense li {
+  font-size: 14px;
+  padding: 9px 0;
+  gap: 12px;
+}
+
+.claims-dense li::before {
+  padding-top: 2px;
+  width: auto;
+}
+
+/* The diff. A claim that appeared is accent and marked +, a claim that went is
+ * struck through and muted. Nothing else changes, because the whole point is
+ * that the two are read at a glance. */
+.claims.diff li::before {
+  content: none;
+}
+
+.claims.diff li {
+  gap: 12px;
+  font-size: 15px;
+  padding: 13px 0;
+}
+
+.claims.diff li .sign {
+  font-family: var(--mono);
+  flex: none;
+}
+
+.claims.diff li[data-diff="added"],
+.claims.diff li[data-diff="added"] .sign {
+  color: var(--accent);
+}
+
+.claims.diff li[data-diff="removed"] {
+  color: var(--muted);
+}
+
+.claims.diff li[data-diff="removed"] .text {
+  text-decoration: line-through;
+}
+
+/* A plain +/− list that is not a diff: what a certificate proves, and what it
+ * does not. */
+.ledger {
+  display: flex;
+  flex-direction: column;
+}
+
+.ledger li {
+  display: flex;
+  gap: 14px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.ledger .sign {
+  font-family: var(--mono);
+  flex: none;
+}
+
+.ledger-yes .sign {
+  color: var(--accent);
+}
+
+.ledger-no,
+.ledger-no .sign {
+  color: var(--muted);
+}
+
+/* ---------- agreement meter ---------- */
+
+.meter {
+  height: 22px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+.meter-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+}
+
+.meter-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink);
+}
+
+.meter-legend {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 7px;
+}
+
+/* ---------- notices ---------- */
+
+.notice {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.notice-accent {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.notice-flag {
+  border-left-color: var(--flag);
+  background: var(--flag-soft);
+}
+
+/* The full-width cloaking verdict on a certificate. It is the most valuable
+ * line the product can produce, so it gets a band of its own rather than an
+ * icon in a corner. */
+.verdict {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 22px var(--pad);
+  border-bottom: 1px solid var(--line);
+}
+
+.verdict-ok {
+  background: var(--accent-soft);
+}
+
+.verdict-flag {
+  background: var(--flag-soft);
+}
+
+.verdict-glyph {
+  width: 26px;
+  height: 26px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+.verdict p {
+  font-size: 18px;
+  line-height: 1.45;
+  max-width: 760px;
+  text-wrap: pretty;
+}
+
+/* ---------- citation ---------- */
+
+.cite {
+  display: flex;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.cite code {
+  flex: 1;
+  min-width: 280px;
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.cite button {
+  border: 0;
+  border-left: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 0 22px;
+}
+
+/* ---------- code ---------- */
+
+pre.code {
+  margin: 0;
+  padding: 16px;
+  background: var(--slab);
+  color: var(--slab-ink);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+pre.code .c {
+  color: var(--slab-muted);
+}
+
+/* ---------- timeline ---------- */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tl-item {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 24px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+
+.tl-when {
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.tl-when .id {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* ---------- certificate card ----------
+ *
+ * The shareable unit. Most of the time it will be met as a screenshot of
+ * itself, so everything needed to judge it is inside the frame.
+ */
+
+.cert {
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.cert-head {
+  background: var(--slab);
+  color: var(--slab-ink);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cert-head a {
+  color: var(--slab-ink);
+}
+
+.cert-head a:hover {
+  color: var(--accent-bright);
+}
+
+.cert-when {
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cert-when .d,
+.cert-when .t {
+  font-family: var(--mono);
+  font-size: clamp(28px, 3.2vw, 40px);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  display: block;
+}
+
+.cert-when .t {
+  color: var(--accent);
+}
+
+.cert-when .z {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.cert-url {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 14px;
+  word-break: break-all;
+}
+
+.cert-body {
+  padding: 16px 20px;
+}
+
+.cert-foot {
+  border-top: 1px solid var(--line);
+  padding: 12px 20px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--bg);
+}
+
+/* ---------- share card ----------
+ *
+ * A preview of the open graph image, at the same 1200x630 the route renders.
+ * This is the artifact most people actually meet, so it is worth showing the
+ * author what they are about to hand round.
+ */
+
+.sharecard {
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--slab);
+  color: var(--slab-ink);
+  aspect-ratio: 1200 / 630;
+  display: flex;
+  flex-direction: column;
+}
+
+.sharecard-head {
+  padding: 30px 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--slab-line);
+}
+
+.sharecard-body {
+  flex: 1;
+  padding: 34px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+.sharecard-foot {
+  padding: 20px 40px;
+  border-top: 1px solid var(--slab-line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sharecard .stamp-line {
+  font-family: var(--mono);
+  font-size: clamp(20px, 3.6vw, 44px);
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.sharecard .stamp-line .t {
+  color: var(--accent-bright);
+}
+
+.sharecard .stamp-line .z {
+  font-size: 0.45em;
+  color: var(--slab-muted);
+}
+
+.sharecard .url {
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.5vw, 17px);
+  color: var(--slab-muted);
+  margin-top: 14px;
+  word-break: break-all;
+}
+
+.sharecard .gist {
+  margin-top: 22px;
+  font-size: clamp(11px, 1.35vw, 16px);
+  line-height: 1.45;
+  max-width: 78%;
+  text-wrap: pretty;
+}
+
+.sharecard .tag {
+  font-size: clamp(8px, 0.95vw, 12px);
+  border-color: var(--slab-line);
+  color: var(--slab-muted);
+  background: transparent;
+}
+
+.sharecard .tag-ok {
+  color: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+
+/* Needed explicitly: `.sharecard .tag` outranks a bare `.tag-flag`, so without
+ * this the cloaking flag would quietly render as muted grey on the one surface
+ * most likely to be seen on its own. */
+.sharecard .tag-flag {
+  color: var(--flag-bright);
+  border-color: var(--flag-bright);
+}
+
+/* ---------- how it works, the three plates ---------- */
+
+.plate {
+  height: 104px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.node {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  flex: none;
+}
+
+.bar {
+  flex: 1;
+  height: 9px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.bar span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+}
+
+/* ---------- misc ---------- */
+
+.stack-8 > * + * {
+  margin-top: 8px;
+}
+.stack-12 > * + * {
+  margin-top: 12px;
+}
+.stack-16 > * + * {
+  margin-top: 16px;
+}
+.stack-24 > * + * {
+  margin-top: 24px;
+}
+.stack-36 > * + * {
+  margin-top: 36px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.spacer {
+  flex: 1;
+}
+
+@media (max-width: 860px) {
+  :root {
+    --pad: 20px;
+  }
+  .cols {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .tl-item {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .kv {
+    grid-template-columns: 1fr;
+    gap: 4px 0;
+  }
+  .kv dd {
+    margin-bottom: 10px;
+  }
+  .sharecard-head,
+  .sharecard-body,
+  .sharecard-foot {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .sharecard-head,
+  .sharecard-foot {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .field {
+    flex-wrap: wrap;
+  }
+  .field input {
+    flex-basis: 60%;
+  }
+  .field button {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--ink);
+    padding: 12px 0;
+  }
+  .claims li {
+    font-size: 16px;
+  }
+  .verdict p {
+    font-size: 16px;
+  }
+  /* The card stops holding 1200:630 once that box is shorter than the type
+   * inside it. It is a preview of the real image, not the image itself, so
+   * letting it grow is better than cropping the flag off the bottom. */
+  .sharecard {
+    aspect-ratio: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    transition: none;
+  }
+  .ruled {
+    background-image: none;
+  }
+}

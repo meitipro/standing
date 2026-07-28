@@ -1,0 +1,212 @@
+// Wiring to the Standing Intelligent Contract on GenLayer Testnet Bradbury.
+// Writes go through the browser wallet; reads go through a cached server route.
+
+import { createClient } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+import { TransactionStatus } from "genlayer-js/types";
+import type { WriteStage } from "./types";
+
+export const FAUCET_URL = "https://testnet-faucet.genlayer.foundation/";
+
+/* Read off the chain definition the client is already using rather than typed
+ * out again. A hand written explorer url was wrong here once — it pointed at a
+ * host that no longer exists, and it was being handed to wallets as the
+ * explorer for the network they were being asked to add. */
+export const EXPLORER = (
+  testnetBradbury.blockExplorers?.default.url ??
+  "https://explorer-bradbury.genlayer.com"
+).replace(/\/$/, "");
+
+export const RPC_URL = testnetBradbury.rpcUrls.default.http[0];
+
+export const STANDING = (process.env.NEXT_PUBLIC_STANDING_ADDRESS ||
+  "") as `0x${string}`;
+
+export const IS_LIVE = STANDING.length > 0;
+
+export const ORIGIN =
+  process.env.NEXT_PUBLIC_ORIGIN || "https://standing.wtf";
+
+const BRADBURY = {
+  chainIdHex: `0x${testnetBradbury.id.toString(16)}`, // 4221
+  chainName: testnetBradbury.name,
+  rpcUrls: [RPC_URL],
+  nativeCurrency: testnetBradbury.nativeCurrency,
+  blockExplorerUrls: [EXPLORER],
+};
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+export function readClient() {
+  return createClient({ chain: testnetBradbury });
+}
+
+export function writeClient(address: `0x${string}`, provider: any) {
+  return createClient({ chain: testnetBradbury, account: address, provider });
+}
+
+async function ensureNetwork(provider: any): Promise<void> {
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: BRADBURY.chainIdHex }],
+    });
+  } catch (e: any) {
+    const code = e?.code ?? e?.data?.originalError?.code;
+    if (code === 4902) {
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: BRADBURY.chainIdHex,
+            chainName: BRADBURY.chainName,
+            rpcUrls: BRADBURY.rpcUrls,
+            nativeCurrency: BRADBURY.nativeCurrency,
+            blockExplorerUrls: BRADBURY.blockExplorerUrls,
+          },
+        ],
+      });
+    } else {
+      throw e;
+    }
+  }
+}
+
+export async function connectWallet(): Promise<string> {
+  const provider = (globalThis as any).ethereum;
+  if (!provider) throw new Error("no_wallet");
+  const accounts: string[] = await provider.request({
+    method: "eth_requestAccounts",
+  });
+  await ensureNetwork(provider);
+  return accounts[0];
+}
+
+/**
+ * A capture takes about forty seconds, because several validators are each
+ * fetching the page, rendering it and running a vision model. That is not a
+ * spinner, so the caller is told which stage it is in and the copy narrates
+ * what the network is doing.
+ */
+export async function notarize(opts: {
+  address: `0x${string}`;
+  url: string;
+  onStage?: (s: WriteStage, note?: string) => void;
+}): Promise<{ certId: number; hash: string }> {
+  const { address, url, onStage } = opts;
+  const provider = (globalThis as any).ethereum;
+  if (!provider) throw new Error("no_wallet");
+  if (!IS_LIVE) throw new Error("not_deployed");
+
+  const client = writeClient(address, provider);
+
+  // Never hardcoded. The fee is a governance value that can move, and a stale
+  // constant in the client would fail the write with "fee too low".
+  const fee = (await client.readContract({
+    address: STANDING,
+    functionName: "fee_value",
+    args: [],
+  })) as bigint;
+
+  onStage?.("signing");
+
+  const hash = await client.writeContract({
+    address: STANDING,
+    functionName: "notarize",
+    args: [url],
+    value: BigInt(fee),
+  });
+
+  onStage?.("sent", "validators are fetching the page");
+
+  // Readable on acceptance: the certificate exists and can be shown. The share
+  // and embed actions stay locked until finality, and the page says provisional
+  // until then.
+  const accepted: any = await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.ACCEPTED,
+  });
+  onStage?.("accepted", "agreed, writing the certificate");
+
+  const certId = Number(accepted?.result ?? accepted?.result?.[0] ?? 0);
+
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.FINALIZED,
+  });
+  onStage?.("finalized");
+
+  return { certId, hash };
+}
+
+export async function openWatch(opts: {
+  address: `0x${string}`;
+  url: string;
+  cadenceHours: number;
+  captures: number;
+  onStage?: (s: WriteStage, note?: string) => void;
+}): Promise<{ watchId: number; hash: string }> {
+  const { address, url, cadenceHours, captures, onStage } = opts;
+  const provider = (globalThis as any).ethereum;
+  if (!provider) throw new Error("no_wallet");
+  if (!IS_LIVE) throw new Error("not_deployed");
+
+  const client = writeClient(address, provider);
+  const fee = (await client.readContract({
+    address: STANDING,
+    functionName: "fee_value",
+    args: [],
+  })) as bigint;
+
+  onStage?.("signing");
+
+  const hash = await client.writeContract({
+    address: STANDING,
+    functionName: "watch",
+    args: [url, cadenceHours],
+    value: BigInt(fee) * BigInt(captures),
+  });
+
+  onStage?.("sent", "opening the watch");
+
+  const accepted: any = await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.ACCEPTED,
+  });
+  onStage?.("accepted");
+
+  // A watch holds prepaid captures, which is somebody's money sitting in the
+  // contract, so nothing here calls it done before finality.
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.FINALIZED,
+  });
+  onStage?.("finalized");
+
+  return { watchId: Number(accepted?.result ?? 0), hash };
+}
+
+/**
+ * The contract's error strings are written for people to read, so they are
+ * shown as they are rather than replaced with a generic failure.
+ */
+export function readableError(e: any): string {
+  const raw =
+    e?.message ??
+    e?.data?.message ??
+    e?.shortMessage ??
+    (typeof e === "string" ? e : "");
+
+  if (/user rejected|denied|4001/i.test(raw)) return "You cancelled the signature.";
+  if (/no_wallet/.test(raw))
+    return "No wallet was found in this browser.";
+  if (/not_deployed/.test(raw))
+    return "The contract is not deployed yet, so nothing can be captured.";
+  if (/insufficient funds|insufficient balance/i.test(raw))
+    return `Not enough GEN in this account to pay the fee. Bradbury is a testnet, so top it up at ${FAUCET_URL}`;
+
+  // The interesting failures come back carrying the contract's own sentence.
+  const m = /UserError\(?['"]?(.+?)['"]?\)?$/.exec(raw);
+  if (m) return m[1];
+  return raw || "The transaction failed.";
+}

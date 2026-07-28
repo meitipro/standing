@@ -1,0 +1,28 @@
+node_modules
+.next
+out
+build
+
+# Every local env file. .env.example is committed on purpose and is the only
+# one that should ever be: it documents the variables and holds no values.
+# STANDING_DEPLOYER_KEY in particular is a spending key and belongs in the
+# shell for the length of one command, never in a file in the tree.
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Keys and keystores, in case one is ever dropped here while testing.
+*.pem
+*.key
+keystore.json
+
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+.DS_Store
+Thumbs.db
+__pycache__
+*.pyc
