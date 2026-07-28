@@ -50,6 +50,44 @@ function flag(name, fallback) {
   return hit ? hit.slice(name.length + 3) : fallback;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * genlayer-js's deployContract estimates gas itself, and if that single rpc
+ * call drops — a lone ECONNRESET, seen twice in testing — it silently falls
+ * back to a hardcoded 200_000 gas rather than retrying. For a contract this
+ * size that is not enough, and the chain answers "intrinsic gas too low"
+ * before the transaction ever reaches consensus, so nothing is spent — only
+ * the attempt is wasted.
+ *
+ * There is no public way to hand deployContract a gas value of our own, so
+ * the only lever from outside is to retry the whole call when this exact
+ * shape of failure shows up. A real contract error (the constructor itself
+ * rejecting, say) does not look like this and is left to propagate.
+ */
+async function deployWithRetry(client, code, feeWei, overlapBps, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await client.deployContract({ code, args: [feeWei, overlapBps] });
+    } catch (e) {
+      const msg = String(e?.message ?? e);
+      const lookedStarved = /intrinsic gas too low/i.test(msg);
+      const lookedFlaky = /fetch failed|ECONNRESET|ETIMEDOUT/i.test(msg);
+
+      if ((lookedStarved || lookedFlaky) && i < attempts) {
+        console.log(
+          `  attempt ${i} hit a transient rpc hiccup (${
+            lookedStarved ? "gas estimation fell back too low" : "connection dropped"
+          }), nothing was spent — retrying…`
+        );
+        await sleep(2000 * i);
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 async function main() {
   const key = process.env.STANDING_DEPLOYER_KEY;
 
@@ -144,10 +182,7 @@ async function main() {
 
   console.log("\n  deploying…");
 
-  const hash = await client.deployContract({
-    code,
-    args: [feeWei, overlapBps],
-  });
+  const hash = await deployWithRetry(client, code, feeWei, overlapBps);
 
   console.log(`  tx          ${hash}`);
   console.log("  waiting for the network to accept it…");
