@@ -101,6 +101,25 @@ The product also never prints "4 of 5 validators matched", which both of the
 brief's screens do. A contract cannot see how many validators agreed; that lives
 in the consensus layer. It shows the threshold, which is true and on chain.
 
+## Networks
+
+Bradbury is the default and where the contract lives. Every script takes
+`--network=bradbury|asimov|studio`, and the site reads
+`NEXT_PUBLIC_GENLAYER_NETWORK` (same three names).
+
+A contract address only means anything on the chain it was deployed to —
+reading a Bradbury address against Asimov reports "contract not found", which
+looks exactly like a failed deployment. That is why every script prints the
+network it just asked.
+
+**A deployment can also be readable at the consensus layer and unreadable at
+the execution layer.** That happened here: a deploy finalized correctly, and
+`gen_call` answered "contract not found at address" for hours afterwards before
+the node caught up on its own. If `npm run check` says not found on a contract
+you just deployed, check the transaction with `npm run tx` first — if the
+execution result is `FINISHED_WITH_RETURN`, the deployment is fine and the node
+is behind. Wait rather than redeploying.
+
 ## Deploying
 
 ```bash

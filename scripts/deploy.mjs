@@ -20,12 +20,13 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
 import { createClient, createAccount } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { pickNetwork } from "./network.mjs";
 import { TransactionStatus } from "genlayer-js/types";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONTRACT = join(HERE, "..", "contracts", "standing.py");
-const EXPLORER = testnetBradbury.blockExplorers.default.url;
+const net = pickNetwork();
+const EXPLORER = net.explorer;
 const FAUCET = "https://testnet-faucet.genlayer.foundation/";
 
 const GEN = 10n ** 18n;
@@ -134,7 +135,7 @@ async function main() {
 
   const code = readFileSync(CONTRACT, "utf8");
   const account = createAccount(key);
-  const client = createClient({ chain: testnetBradbury, account });
+  const client = createClient({ chain: net.chain, account });
 
   /* Checked before the confirmation prompt rather than after it. An unfunded
    * account fails somewhere inside the send with a message about gas that reads
@@ -145,7 +146,7 @@ async function main() {
     balance = await client.getBalance({ address: account.address });
   } catch (e) {
     die(
-      `Could not reach ${testnetBradbury.rpcUrls.default.http[0]} to read the balance.\n` +
+      `Could not reach ${net.rpc} to read the balance.\n` +
         `  ${e?.shortMessage ?? e?.message ?? e}`
     );
   }
@@ -166,7 +167,7 @@ async function main() {
   console.log("");
   console.log("  contract    contracts/standing.py");
   console.log(`  bytes       ${code.length.toLocaleString("en-US")}`);
-  console.log(`  network     ${testnetBradbury.name} (chain ${testnetBradbury.id})`);
+  console.log(`  network     ${net.chain.name} (chain ${net.chain.id}) [--network=${net.name}]`);
   console.log(`  deployer    ${account.address}`);
   console.log(`  balance     ${balanceGen} GEN`);
   console.log(`  fee         ${feeGen} GEN  (${feeWei} wei)`);

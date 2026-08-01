@@ -13,10 +13,11 @@
  * find here than after the site is serving it.
  */
 import { createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { pickNetwork } from "./network.mjs";
 
 const GEN = 10n ** 18n;
-const EXPLORER = testnetBradbury.blockExplorers.default.url;
+const net = pickNetwork();
+const EXPLORER = net.explorer;
 
 const address = process.argv[2];
 
@@ -25,7 +26,7 @@ if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
   console.error("  A contract address is 0x followed by 40 hex characters.\n");
   process.exitCode = 1;
 } else {
-  const client = createClient({ chain: testnetBradbury });
+  const client = createClient({ chain: net.chain });
 
   const read = (functionName, args = []) =>
     client.readContract({ address, functionName, args });
@@ -58,7 +59,7 @@ if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
     console.log("  It answers, and it is Standing.");
     console.log("");
     console.log(`  address     ${address}`);
-    console.log(`  network     ${testnetBradbury.name} (chain ${testnetBradbury.id})`);
+    console.log(`  network     ${net.chain.name} (chain ${net.chain.id}) [--network=${net.name}]`);
     console.log(`  owner       ${owner}`);
     console.log(`  fee         ${feeGen} GEN  (${feeWei} wei)`);
     console.log(`  threshold   ${overlapBps} bps`);

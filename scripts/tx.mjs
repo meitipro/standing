@@ -14,9 +14,10 @@
  * the moment there is one.
  */
 import { createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { pickNetwork } from "./network.mjs";
 
-const EXPLORER = testnetBradbury.blockExplorers.default.url;
+const net = pickNetwork();
+const EXPLORER = net.explorer;
 
 /**
  * The calldata decoder returns Maps, and JSON.stringify(new Map()) is "{}"
@@ -52,7 +53,7 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
   console.error("  for a transaction that does not exist.\n");
   process.exitCode = 1;
 } else {
-  const client = createClient({ chain: testnetBradbury });
+  const client = createClient({ chain: net.chain });
 
   try {
     const tx = await client.getTransaction({ hash });

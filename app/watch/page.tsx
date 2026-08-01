@@ -59,9 +59,20 @@ export default async function WatchPage() {
         <h2 className="h3">Watched pages</h2>
 
         {rows.length === 0 ? (
-          <p className="muted small" style={{ marginTop: 14 }}>
-            No watches yet.
-          </p>
+          <div
+            style={{
+              marginTop: 18,
+              border: "1px dashed var(--line)",
+              borderRadius: "var(--radius)",
+              padding: "28px 24px",
+            }}
+          >
+            <p className="muted pretty" style={{ maxWidth: "58ch" }}>
+              No pages are being watched yet. Open one above and every capture
+              it makes will be listed here, with the claims that were added and
+              removed between them.
+            </p>
+          </div>
         ) : (
           <div className="scroll-x table-framed" style={{ marginTop: 18 }}>
           <table className="table">

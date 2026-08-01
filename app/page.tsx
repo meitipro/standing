@@ -72,7 +72,7 @@ export default async function Home() {
 
         {/* The product explains itself by showing its output, so a real record
             sits in the hero rather than an illustration of one. */}
-        {featured && (
+        {featured ? (
           <div>
             <div
               className="eyebrow"
@@ -94,6 +94,42 @@ export default async function Home() {
             </div>
             <div className="shadow-soft">
               <CertificateCard cert={featured} dense />
+            </div>
+          </div>
+        ) : (
+          /* Nothing has been captured yet. The obvious move would be a sample
+             certificate with the corners greyed out, and it is the one thing
+             this product must never do: an invented record on the page a
+             reader is most likely to screenshot is exactly the harm the whole
+             thing exists to prevent. So the frame stays, and says what will
+             fill it. */
+          <div>
+            <p className="eyebrow" style={{ marginBottom: 14 }}>
+              Nothing captured yet
+            </p>
+            <div
+              style={{
+                border: "1px dashed var(--line)",
+                borderRadius: "var(--radius)",
+                background: "var(--panel)",
+                padding: "36px 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+              }}
+            >
+              <p className="serif" style={{ fontSize: 26, lineHeight: 1.15 }}>
+                The first certificate will appear here.
+              </p>
+              <p className="small muted pretty" style={{ maxWidth: "46ch" }}>
+                This space is deliberately empty. A sample certificate sitting
+                here would be an invented record on the most quotable part of
+                the site, which is the exact thing this product was built to
+                stop.
+              </p>
+              <p className="mono tiny muted">
+                paste a url above · 0.4 GEN · about forty seconds
+              </p>
             </div>
           </div>
         )}
@@ -507,7 +543,37 @@ export default async function Home() {
       </section>
 
       {/* ---------- recent captures ---------- */}
-      {recent.length > 0 && (
+      {recent.length === 0 ? (
+        <section
+          className="band pad"
+          style={{ paddingTop: 56, paddingBottom: 72 }}
+        >
+          <p className="eyebrow" style={{ marginBottom: 18 }}>
+            Recent captures
+          </p>
+          <div
+            style={{
+              border: "1px dashed var(--line)",
+              borderRadius: "var(--radius)",
+              padding: "32px 24px",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 20,
+            }}
+          >
+            <p className="muted pretty" style={{ maxWidth: "52ch" }}>
+              No pages have been notarised yet. Every capture that is made will
+              be listed here, newest first, and every one of them will be a
+              real record.
+            </p>
+            <div className="spacer" />
+            <Link href="/verify" className="btn">
+              What a certificate proves
+            </Link>
+          </div>
+        </section>
+      ) : (
         <section
           className="band pad"
           style={{ paddingTop: 56, paddingBottom: 72 }}

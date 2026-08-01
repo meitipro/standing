@@ -2,9 +2,39 @@
 // Writes go through the browser wallet; reads go through a cached server route.
 
 import { createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 import type { WriteStage } from "./types";
+
+/* Which GenLayer network this build talks to.
+ *
+ * Bradbury is the default and where the contract lives. The switch exists
+ * because a node can be healthy at the consensus layer and still not serve a
+ * contract from the execution layer — that happened here: a deployment
+ * finalized correctly and stayed unreadable for hours before the node caught
+ * up. Being able to point a build elsewhere without editing source is worth
+ * the handful of lines.
+ *
+ * A contract address is per network. Changing this without changing
+ * NEXT_PUBLIC_STANDING_ADDRESS gives a site that cannot find its own contract,
+ * which is why the name is printed in the console banner below.
+ */
+const NETWORKS = {
+  bradbury: testnetBradbury,
+  asimov: testnetAsimov,
+  studio: studionet,
+} as const;
+
+type NetworkName = keyof typeof NETWORKS;
+
+const requested = (process.env.NEXT_PUBLIC_GENLAYER_NETWORK ??
+  "bradbury") as NetworkName;
+
+export const NETWORK_NAME: NetworkName = requested in NETWORKS
+  ? requested
+  : "bradbury";
+
+export const CHAIN = NETWORKS[NETWORK_NAME];
 
 export const FAUCET_URL = "https://testnet-faucet.genlayer.foundation/";
 
@@ -13,11 +43,11 @@ export const FAUCET_URL = "https://testnet-faucet.genlayer.foundation/";
  * host that no longer exists, and it was being handed to wallets as the
  * explorer for the network they were being asked to add. */
 export const EXPLORER = (
-  testnetBradbury.blockExplorers?.default.url ??
+  CHAIN.blockExplorers?.default.url ??
   "https://explorer-bradbury.genlayer.com"
 ).replace(/\/$/, "");
 
-export const RPC_URL = testnetBradbury.rpcUrls.default.http[0];
+export const RPC_URL = CHAIN.rpcUrls.default.http[0];
 
 export const STANDING = (process.env.NEXT_PUBLIC_STANDING_ADDRESS ||
   "") as `0x${string}`;
@@ -48,21 +78,21 @@ export const ORIGIN =
     : "https://standing.wtf");
 
 const BRADBURY = {
-  chainIdHex: `0x${testnetBradbury.id.toString(16)}`, // 4221
-  chainName: testnetBradbury.name,
+  chainIdHex: `0x${CHAIN.id.toString(16)}`,
+  chainName: CHAIN.name,
   rpcUrls: [RPC_URL],
-  nativeCurrency: testnetBradbury.nativeCurrency,
+  nativeCurrency: CHAIN.nativeCurrency,
   blockExplorerUrls: [EXPLORER],
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export function readClient() {
-  return createClient({ chain: testnetBradbury });
+  return createClient({ chain: CHAIN });
 }
 
 export function writeClient(address: `0x${string}`, provider: any) {
-  return createClient({ chain: testnetBradbury, account: address, provider });
+  return createClient({ chain: CHAIN, account: address, provider });
 }
 
 async function ensureNetwork(provider: any): Promise<void> {
