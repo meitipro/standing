@@ -53,15 +53,6 @@ function precheck(raw: string): string {
   return "";
 }
 
-function normalise(raw: string): string {
-  const value = raw.trim();
-  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
-  const u = new URL(withScheme);
-  // The fragment never reaches the server, so it is dropped here for the same
-  // reason the contract drops it.
-  return `${u.protocol}//${u.host.toLowerCase()}${u.pathname}${u.search}`;
-}
-
 const NARRATION: Record<WriteStage, string> = {
   idle: "",
   signing: "Confirm the fee in your wallet.",
@@ -108,7 +99,7 @@ export default function NotarizeField({
       const address = (await connectWallet()) as `0x${string}`;
       const { certId } = await notarize({
         address,
-        url: normalise(url),
+        url: url.trim(),
         onStage: (s, n) => {
           setStage(s);
           setNote(n ?? "");

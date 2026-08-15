@@ -124,6 +124,27 @@ export function addHours(at: string, hours: number): string {
   return new Date(t + hours * 3600000).toISOString().slice(0, 19);
 }
 
+/**
+ * The same normalisation the contract's `_check_url` performs, done here so a
+ * url the client sends and the url the contract stores are the same string.
+ *
+ * They have to match exactly, because both the watch index and the "which
+ * certificate did I just create" lookup are keyed on the stored url. The
+ * contract lowercases the host, gives an empty path a "/", keeps the query and
+ * drops the fragment — the fragment never reaches a server, so leaving it on
+ * would let one page look like two different ones.
+ *
+ * Throws on anything that is not a url. The contract refuses those too, with a
+ * better message; this only has to avoid sending an obvious non-url.
+ */
+export function normaliseUrl(raw: string): string {
+  const value = raw.trim();
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  const u = new URL(withScheme);
+  const path = u.pathname === "" ? "/" : u.pathname;
+  return `${u.protocol}//${u.host.toLowerCase()}${path}${u.search}`;
+}
+
 /** A sha256 hex digest, which is the only thing /verify will look up. */
 export function isDigest(value: string): boolean {
   return /^[0-9a-f]{64}$/i.test(value.trim());

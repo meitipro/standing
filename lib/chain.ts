@@ -5,6 +5,7 @@ import { createClient } from "genlayer-js";
 import { studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 import type { WriteStage } from "./types";
+import { normaliseUrl } from "./format";
 
 /* Which GenLayer network this build talks to.
  *
@@ -133,6 +134,66 @@ export async function connectWallet(): Promise<string> {
 }
 
 /**
+ * Which certificate a capture produced, asked of the contract rather than
+ * scraped off the receipt.
+ *
+ * The obvious source is the transaction's return value, and the obvious field
+ * is `result` — which is the consensus vote (1 = AGREE), not the contract's
+ * return, so reading it sent every capture to certificate 1. The real return
+ * lives under `consensus_data.leader_receipt[].result`, a shape the Bradbury
+ * receipt does not carry at all.
+ *
+ * So: read the counter and walk back, matching on url and requester. Slightly
+ * more work, but it depends only on the contract's own public view methods,
+ * which are the one part of this whose shape is guaranteed. The walk is
+ * bounded because a handful of captures can land between the send and the
+ * read; if none of them is ours, the caller is told rather than sent to
+ * somebody else's record.
+ */
+async function findCertId(
+  client: any,
+  url: string,
+  requester: string
+): Promise<number> {
+  const total = Number(
+    await client.readContract({
+      address: STANDING,
+      functionName: "total_certs",
+      args: [],
+    })
+  );
+
+  const wanted = requester.toLowerCase();
+  let mineButOtherUrl = -1;
+
+  for (let id = total - 1; id >= 0 && id > total - 12; id--) {
+    try {
+      const cert: any = await client.readContract({
+        address: STANDING,
+        functionName: "certificate",
+        args: [id],
+      });
+      if (String(cert?.requester).toLowerCase() !== wanted) continue;
+
+      if (String(cert?.url) === url) return id;
+
+      /* Ours, but the url does not match to the byte. The contract normalises
+       * what it stores, and this client normalises the same way, so that
+       * should not happen — but if the two ever drift, landing on this
+       * requester's newest capture is far better than throwing after they
+       * have already paid the fee. */
+      if (mineButOtherUrl === -1) mineButOtherUrl = id;
+    } catch {
+      // A single unreadable record should not abandon the search.
+    }
+  }
+
+  if (mineButOtherUrl !== -1) return mineButOtherUrl;
+
+  throw new Error("capture_not_found");
+}
+
+/**
  * A capture takes about forty seconds, because several validators are each
  * fetching the page, rendering it and running a vision model. That is not a
  * spinner, so the caller is told which stage it is in and the copy narrates
@@ -160,10 +221,14 @@ export async function notarize(opts: {
 
   onStage?.("signing");
 
+  /* Normalised here rather than trusting the caller, so the string sent and
+   * the string findCertId matches on are the same one. */
+  const target = normaliseUrl(url);
+
   const hash = await client.writeContract({
     address: STANDING,
     functionName: "notarize",
-    args: [url],
+    args: [target],
     value: BigInt(fee),
   });
 
@@ -172,13 +237,13 @@ export async function notarize(opts: {
   // Readable on acceptance: the certificate exists and can be shown. The share
   // and embed actions stay locked until finality, and the page says provisional
   // until then.
-  const accepted: any = await client.waitForTransactionReceipt({
+  await client.waitForTransactionReceipt({
     hash,
     status: TransactionStatus.ACCEPTED,
   });
   onStage?.("accepted", "agreed, writing the certificate");
 
-  const certId = Number(accepted?.result ?? accepted?.result?.[0] ?? 0);
+  const certId = await findCertId(client, target, address);
 
   await client.waitForTransactionReceipt({
     hash,
@@ -219,11 +284,28 @@ export async function openWatch(opts: {
 
   onStage?.("sent", "opening the watch");
 
-  const accepted: any = await client.waitForTransactionReceipt({
+  await client.waitForTransactionReceipt({
     hash,
     status: TransactionStatus.ACCEPTED,
   });
   onStage?.("accepted");
+
+  /* Same receipt problem as a capture, but the contract offers a direct
+   * lookup here — one url has at most one watch — so this needs no walk.
+   *
+   * The lookup key is the url the contract stored, which is the normalised
+   * one, so it is normalised here too rather than passed as typed. */
+  const raw = await client.readContract({
+    address: STANDING,
+    functionName: "watch_for_url",
+    args: [normaliseUrl(url)],
+  });
+
+  /* The contract answers with max u256 for a url it has no watch for, because
+   * zero is a real watch id. Unguarded that becomes a redirect to a watch
+   * numbered 1.1e77. */
+  const watchId = Number(raw);
+  if (!Number.isSafeInteger(watchId)) throw new Error("watch_not_found");
 
   // A watch holds prepaid captures, which is somebody's money sitting in the
   // contract, so nothing here calls it done before finality.
@@ -233,7 +315,7 @@ export async function openWatch(opts: {
   });
   onStage?.("finalized");
 
-  return { watchId: Number(accepted?.result ?? 0), hash };
+  return { watchId, hash };
 }
 
 /**

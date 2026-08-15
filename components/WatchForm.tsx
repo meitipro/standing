@@ -56,7 +56,7 @@ export default function WatchForm() {
       const address = (await connectWallet()) as `0x${string}`;
       const { watchId } = await openWatch({
         address,
-        url: url.trim(),
+        url: url.trim(), // normalised inside openWatch
         cadenceHours: cadence,
         captures,
         onStage: setStage,
