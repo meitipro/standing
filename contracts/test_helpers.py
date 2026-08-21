@@ -226,6 +226,85 @@ check("172.31 is private", standing._is_private_172("172.31.0.1"), True)
 check("172.32 is public", standing._is_private_172("172.32.0.1"), False)
 check("a name that merely starts with 172 is not an address", standing._is_private_172("172.example.xyz"), False)
 
+# ---------- _clean_verdict ----------
+
+check("the three pass through", standing._clean_verdict("material"), "material")
+check("case and space are forgiven", standing._clean_verdict("  Reworded "), "reworded")
+check("cosmetic maps to reworded", standing._clean_verdict("cosmetic"), "reworded")
+check("substantive maps to material", standing._clean_verdict("substantive"), "material")
+check("identical maps to unchanged", standing._clean_verdict("identical"), "unchanged")
+
+# The important one. A verdict outside the three must raise rather than default,
+# because a silent fallback would render an invented finding as a real one.
+try:
+    standing._clean_verdict("probably fine")
+    check("an unknown verdict raises", False, True)
+except Exception:
+    check("an unknown verdict raises", True, True)
+
+try:
+    standing._clean_verdict("")
+    check("an empty verdict raises", False, True)
+except Exception:
+    check("an empty verdict raises", True, True)
+
+# ---------- _clean_changes ----------
+
+check(
+    "collapses, trims and sorts",
+    standing._clean_changes(["  b was 2, now 3 ", "a was 1, now 2."]),
+    ["a was 1, now 2", "b was 2, now 3"],
+)
+check("drops empties", standing._clean_changes(["", "   ", "real change"]), ["real change"])
+check(
+    "dedupes case insensitively",
+    standing._clean_changes(["Fee was 1, now 5", "fee was 1, now 5"]),
+    ["Fee was 1, now 5"],
+)
+check(
+    "caps the count",
+    len(standing._clean_changes(["change " + str(i) for i in range(20)])),
+    standing.MAX_CHANGES,
+)
+check(
+    "caps the length",
+    len(standing._clean_changes(["x" * 500])[0]),
+    standing.MAX_CHANGE_CHARS,
+)
+
+# ---------- _tokens ----------
+#
+# This decides whether two validators are pointing at the same edit, so it has
+# to survive different prose about the same numbers.
+
+check(
+    "two phrasings of one edit share their values",
+    len(
+        standing._tokens(["team unlock was 24 months, now 36 months"])
+        & standing._tokens(["the team unlock moved from 24 to 36 months"])
+    )
+    > 0,
+    True,
+)
+check("short filler is dropped", "the" in standing._tokens(["the fee"]), False)
+check("digits survive even when short", "24" in standing._tokens(["was 24"]), True)
+check(
+    "two unrelated edits do not overlap",
+    standing._tokens(["fee was 1 percent, now 5 percent"])
+    & standing._tokens(["headquarters moved to berlin"]),
+    set(),
+)
+
+# ---------- _pair_key ----------
+
+check("pair key is stable", standing._pair_key(3, 9), "3:9")
+check("pair key is ordered, not a set", standing._pair_key(9, 3), "9:3")
+
+# ---------- _clean_summary ----------
+
+check("summary collapses whitespace", standing._clean_summary("  a   b \n c "), "a b c")
+check("summary is capped", len(standing._clean_summary("x" * 999)), standing.MAX_SUMMARY)
+
 # ---------- report ----------
 
 print(f"{PASSED} passed, {len(FAILED)} failed")

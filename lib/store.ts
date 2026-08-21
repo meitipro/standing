@@ -1,4 +1,9 @@
-import type { Certificate, TimelineEntry, WatchRecord } from "./types";
+import type {
+  Assessment,
+  Certificate,
+  TimelineEntry,
+  WatchRecord,
+} from "./types";
 import { SEED_CERTS, SEED_WATCHES, SAMPLE_MODE } from "./seed";
 import { IS_LIVE, STANDING, readClient } from "./chain";
 
@@ -174,6 +179,49 @@ export async function historyForUrl(url: string): Promise<Certificate[]> {
   return all
     .filter((c) => c.url === url)
     .sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/* ---------- assessments ---------- */
+
+function mapAssessment(raw: any, id: number): Assessment {
+  const verdict = String(raw?.verdict ?? "");
+  return {
+    id: toNum(raw?.id ?? id),
+    certA: toNum(raw?.cert_a),
+    certB: toNum(raw?.cert_b),
+    url: String(raw?.url ?? ""),
+    // The contract only ever stores one of the three, but this is the boundary
+    // between an on-chain string and a union type, so it is checked here rather
+    // than asserted.
+    verdict:
+      verdict === "material" || verdict === "reworded" ? verdict : "unchanged",
+    summary: String(raw?.summary ?? ""),
+    changes: (raw?.changes ?? []).map((c: any) => String(c)),
+    at: String(raw?.at ?? ""),
+    requester: String(raw?.requester ?? ""),
+  };
+}
+
+/**
+ * The verdict on one pair of captures, or null if nobody has asked yet.
+ *
+ * The contract answers with max u256 for a pair it has never assessed, because
+ * zero is a real assessment id.
+ */
+export async function assessmentForPair(
+  certA: number,
+  certB: number
+): Promise<Assessment | null> {
+  if (!IS_LIVE) return null;
+  return cached(`assess:${certA}:${certB}`, () =>
+    safely(`assessment for ${certA}:${certB}`, null as Assessment | null, async () => {
+      const id = toNum(
+        await read("assessment_for_pair", [certA, certB])
+      );
+      if (!Number.isSafeInteger(id) || id < 0) return null;
+      return mapAssessment(await read("assessment", [id]), id);
+    })
+  );
 }
 
 /* ---------- watches ---------- */

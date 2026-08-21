@@ -76,6 +76,36 @@ restyle must keep them:
   card, where a plain `.sharecard .tag` rule would otherwise outrank
   `.tag-flag` and quietly grey it out.
 
+## The judgment: did the change matter?
+
+A claim diff is a set operation. It can say two claims left and two arrived —
+and it says exactly that whether a fee moved from one percent to five, or a
+copywriter reworded the same sentence. Those are the same diff and opposite
+findings, and no amount of string comparison separates them.
+
+`assess(cert_a, cert_b)` puts that judgment through consensus. Several
+validators each read the same two claim sets, each decide independently, and
+the transaction only lands if they agree on one of three words:
+
+| verdict | means |
+| --- | --- |
+| `unchanged` | Nothing of consequence differs. |
+| `reworded` | Same facts, different words. A reader would act the same way. |
+| `material` | At least one fact a reader would act on is different. |
+
+The verdict is compared **exactly** between validators, because it is the
+decision — anything looser lets one leader decide alone. For a material verdict
+they must also agree on *which* values moved, compared on the numbers and words
+named rather than on prose, since two models never write the same sentence.
+
+Two things it refuses to do. A material verdict with no change listed is
+rejected, because that is the shape a guessing model produces and it would
+render as an accusation with nothing under it. And an identical claim set
+short-circuits to `unchanged` with no model call at all — free, and immune to a
+model having a bad day.
+
+Priced at half a capture (`assess_fee`), since it runs one prompt and no render.
+
 ## The one thing worth knowing
 
 The two digests on a certificate are **not** worth the same, and every surface

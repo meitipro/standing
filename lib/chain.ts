@@ -319,6 +319,72 @@ export async function openWatch(opts: {
 }
 
 /**
+ * Ask the network whether the change between two captures was substantive.
+ *
+ * This is the one call in the product that is a judgment rather than a record.
+ * Several validators each read the same two claim sets, each decide
+ * independently, and the transaction only lands if they reach the same verdict
+ * — so the answer on chain is not one model's opinion.
+ */
+export async function assess(opts: {
+  address: `0x${string}`;
+  certA: number;
+  certB: number;
+  onStage?: (s: WriteStage, note?: string) => void;
+}): Promise<{ assessmentId: number; hash: string }> {
+  const { address, certA, certB, onStage } = opts;
+  const provider = (globalThis as any).ethereum;
+  if (!provider) throw new Error("no_wallet");
+  if (!IS_LIVE) throw new Error("not_deployed");
+
+  const client = writeClient(address, provider);
+
+  // Read at call time, never hardcoded: it is derived from the capture fee and
+  // moves with it.
+  const price = (await client.readContract({
+    address: STANDING,
+    functionName: "assess_fee",
+    args: [],
+  })) as bigint;
+
+  onStage?.("signing");
+
+  const hash = await client.writeContract({
+    address: STANDING,
+    functionName: "assess",
+    args: [certA, certB],
+    value: BigInt(price),
+  });
+
+  onStage?.("sent", "validators are each reading both captures and deciding");
+
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.ACCEPTED,
+  });
+  onStage?.("accepted", "agreed. writing the verdict");
+
+  /* Same receipt problem as the other writes — `result` is the consensus vote,
+   * not the return — so the id comes from the contract's own pair lookup. */
+  const raw = await client.readContract({
+    address: STANDING,
+    functionName: "assessment_for_pair",
+    args: [certA, certB],
+  });
+
+  const assessmentId = Number(raw);
+  if (!Number.isSafeInteger(assessmentId)) throw new Error("assessment_not_found");
+
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.FINALIZED,
+  });
+  onStage?.("finalized");
+
+  return { assessmentId, hash };
+}
+
+/**
  * The contract's error strings are written for people to read, so they are
  * shown as they are rather than replaced with a generic failure.
  */

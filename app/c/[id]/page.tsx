@@ -7,8 +7,9 @@ import AgreementMeter from "@/components/AgreementMeter";
 import CloakingNotice from "@/components/CloakingNotice";
 import CitationBlock from "@/components/CitationBlock";
 import CopyButton from "@/components/CopyButton";
+import ChangeVerdict from "@/components/ChangeVerdict";
 import Mark from "@/components/Mark";
-import { getCertificate, historyForUrl } from "@/lib/store";
+import { assessmentForPair, getCertificate, historyForUrl } from "@/lib/store";
 import {
   displayUrl,
   formatCount,
@@ -63,6 +64,12 @@ export default async function CertificatePage({ params }: Params) {
 
   const { d, t } = splitIso(cert.at);
   const previousDay = previous ? splitIso(previous.at).d : "";
+
+  /* Only asked for when there is a previous capture to compare against, so a
+   * first capture costs no extra chain read. */
+  const assessment = previous
+    ? await assessmentForPair(previous.id, cert.id)
+    : null;
 
   const record = {
     id: cert.id,
@@ -196,8 +203,15 @@ export default async function CertificatePage({ params }: Params) {
                   </Link>
                 )}
               </div>
-              <div style={{ padding: "4px 16px 14px" }}>
+              <div style={{ padding: "4px 16px 18px" }}>
                 <ClaimDiff added={added} removed={removed} />
+                {/* The diff says what moved. This says whether it mattered,
+                    which is the judgment only the network can settle. */}
+                <ChangeVerdict
+                  certA={previous.id}
+                  certB={cert.id}
+                  existing={assessment}
+                />
               </div>
             </div>
           )}

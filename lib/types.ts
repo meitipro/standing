@@ -63,6 +63,28 @@ export type TimelineEntry = {
   hasPrevious: boolean;
 };
 
+/**
+ * The three answers the network can reach about a change between two captures.
+ *
+ * A claim diff can say two claims left and two arrived. It cannot say whether a
+ * fee moved from one percent to five or whether the same fee was reworded, and
+ * those are the same diff with opposite meanings.
+ */
+export type VerdictKind = "unchanged" | "reworded" | "material";
+
+export type Assessment = {
+  id: number;
+  certA: number;
+  certB: number;
+  url: string;
+  verdict: VerdictKind;
+  summary: string;
+  /** Only ever populated for a material verdict, each naming old and new. */
+  changes: string[];
+  at: string;
+  requester: string;
+};
+
 export type WriteStage =
   | "idle"
   | "signing"
