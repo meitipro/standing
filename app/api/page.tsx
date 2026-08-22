@@ -36,6 +36,11 @@ const ENDPOINTS = [
     job: "A watch with its full timeline and per capture diffs.",
   },
   {
+    method: "GET",
+    path: "/api/v1/assessments?from=&to=",
+    job: "The network's verdict on a change: unchanged, reworded or material.",
+  },
+  {
     method: "POST",
     path: "/api/v1/notarize",
     job: "Capture a page. Needs a relayer key, so it answers 501 today.",
@@ -173,6 +178,27 @@ export default async function ApiPage() {
             is the cheapest abuse control there is and the reason the method is
             payable.
           </p>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 40 }}>
+        <h2 className="h3">Verdicts, not just diffs</h2>
+        <p className="small muted pretty" style={{ marginTop: 10, maxWidth: "68ch" }}>
+          A diff between two captures is a set operation, and it reports the
+          same thing whether a fee moved from one percent to five or a
+          copywriter reworded the sentence. If you are building on this, that
+          distinction is usually the whole question, so the network can settle
+          it: several validators each read both claim sets, decide
+          independently, and the verdict only lands if they agree on one of{" "}
+          <code className="mono">unchanged</code>,{" "}
+          <code className="mono">reworded</code> or{" "}
+          <code className="mono">material</code>.
+        </p>
+        <div className="notice" style={{ marginTop: 16, maxWidth: "68ch" }}>
+          <strong>A 404 here is not a verdict.</strong> It means nobody has
+          asked the network about that pair yet, which is a different fact from
+          the network having judged it unchanged. Treating the first as the
+          second would report a silent edit as a quiet page.
         </div>
       </section>
 

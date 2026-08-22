@@ -1,4 +1,9 @@
-import type { Certificate, TimelineEntry, WatchRecord } from "./types";
+import type {
+  Assessment,
+  Certificate,
+  TimelineEntry,
+  WatchRecord,
+} from "./types";
 import { ORIGIN } from "./chain";
 
 /**
@@ -40,6 +45,37 @@ export function certificateJson(cert: Certificate) {
     proves:
       "Several independent validators saw these claims on this url at this time. Not that the claims are true.",
     url_html: `${ORIGIN}/c/${cert.id}`,
+  };
+}
+
+/**
+ * A verdict, as the chain holds it.
+ *
+ * `verdict` is the only field a consumer should branch on. It is the string
+ * every validator had to reach independently before the transaction landed;
+ * `summary` and `changes` are the explanation attached to it, agreed on
+ * substance rather than word for word.
+ */
+export function assessmentJson(a: Assessment) {
+  return {
+    id: a.id,
+    url: a.url,
+    compared: { from_certificate: a.certA, to_certificate: a.certB },
+    verdict: a.verdict,
+    summary: a.summary,
+    changes: a.changes,
+    at: `${a.at}Z`,
+    requester: a.requester,
+    means: {
+      unchanged: "Nothing of consequence differs between the two captures.",
+      reworded:
+        "The same facts, stated differently. A reader would act the same way.",
+      material:
+        "At least one fact a reader would act on is different between the two captures.",
+    }[a.verdict],
+    proves:
+      "Several independent validators each compared the two captures and reached this verdict. It is a judgment about the change, not a claim that either capture is true.",
+    url_html: `${ORIGIN}/c/${a.certB}`,
   };
 }
 

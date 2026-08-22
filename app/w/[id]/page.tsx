@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 
 import { ClaimDiff } from "@/components/ClaimList";
 import CopyButton from "@/components/CopyButton";
-import { getTimeline, getWatch } from "@/lib/store";
+import ChangeVerdict from "@/components/ChangeVerdict";
+import { assessmentForPair, getTimeline, getWatch } from "@/lib/store";
 import {
   agoLabel,
   daysBetween,
@@ -16,7 +17,7 @@ import {
   splitStamp,
 } from "@/lib/format";
 import { SAMPLE_MODE } from "@/lib/seed";
-import type { TimelineEntry } from "@/lib/types";
+import type { Assessment, TimelineEntry } from "@/lib/types";
 
 export const revalidate = 5;
 
@@ -94,10 +95,37 @@ export default async function WatchTimeline({ params }: Params) {
   if (!watch) notFound();
 
   const timeline = await getTimeline(id);
+  /* Captures whose claim set differs from the one before. Deliberately not
+   * called "material": that word now names one specific verdict the network
+   * can reach, and using it for "any edit at all" would promise a judgment the
+   * number has not been through. */
   const changes = timeline.filter(
     (e) => e.hasPrevious && (e.added.length > 0 || e.removed.length > 0)
   );
   const rows = ledger(timeline);
+
+  /* The certificate each entry is being compared against, and the network's
+   * verdict on that pair if anyone has asked for one.
+   *
+   * Fetched in one parallel batch rather than inside the render loop: a watch
+   * with thirty captures would otherwise make thirty sequential chain reads
+   * while the page hangs. Only pairs that actually changed are asked about,
+   * since an identical claim set has nothing to judge. */
+  const previousOf = new Map<number, number>();
+  for (let i = 1; i < timeline.length; i++) {
+    previousOf.set(timeline[i].cert.id, timeline[i - 1].cert.id);
+  }
+
+  const verdicts = new Map<number, Assessment | null>(
+    await Promise.all(
+      changes.map(async (e) => {
+        const prev = previousOf.get(e.cert.id);
+        const found =
+          prev === undefined ? null : await assessmentForPair(prev, e.cert.id);
+        return [e.cert.id, found] as [number, Assessment | null];
+      })
+    )
+  );
 
   const bundle = {
     watch: {
@@ -149,7 +177,7 @@ export default async function WatchTimeline({ params }: Params) {
         </div>
         <div className="stat">
           <span className="n">{changes.length}</span>
-          <span className="k">material changes</span>
+          <span className="k">captures with edits</span>
         </div>
       </div>
 
@@ -178,7 +206,7 @@ export default async function WatchTimeline({ params }: Params) {
         <ol className="timeline" style={{ marginTop: 22 }}>
           {[...timeline].reverse().map((entry) => {
             const { d, t } = splitStamp(entry.cert.at);
-            const material = entry.added.length > 0 || entry.removed.length > 0;
+            const changed = entry.added.length > 0 || entry.removed.length > 0;
             return (
               <li className="tl-item" key={entry.cert.id}>
                 <div className="tl-when">
@@ -196,7 +224,7 @@ export default async function WatchTimeline({ params }: Params) {
                     {!entry.hasPrevious && (
                       <span className="tag">first capture</span>
                     )}
-                    {material && <span className="tag tag-ok">changed</span>}
+                    {changed && <span className="tag tag-ok">changed</span>}
                     {entry.cert.cloaking && (
                       <span className="tag tag-flag">cloaking</span>
                     )}
@@ -205,7 +233,16 @@ export default async function WatchTimeline({ params }: Params) {
                     )}
                   </div>
                   {entry.hasPrevious ? (
-                    <ClaimDiff added={entry.added} removed={entry.removed} />
+                    <>
+                      <ClaimDiff added={entry.added} removed={entry.removed} />
+                      {changed && (
+                        <ChangeVerdict
+                          certA={previousOf.get(entry.cert.id) as number}
+                          certB={entry.cert.id}
+                          existing={verdicts.get(entry.cert.id) ?? null}
+                        />
+                      )}
+                    </>
                   ) : (
                     <p className="small muted">
                       Baseline. {entry.cert.claims.length} claims recorded, with
