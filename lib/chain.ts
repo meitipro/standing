@@ -319,6 +319,143 @@ export async function openWatch(opts: {
 }
 
 /**
+ * The three prices, read from the contract rather than written down here.
+ *
+ * They are governance values derived from one another, so a constant in this
+ * file would be wrong the moment the fee moved — and it would be wrong on a
+ * screen that tells someone what they are about to spend.
+ */
+export async function prices(): Promise<{
+  capture: bigint;
+  snapshot: bigint;
+  assess: bigint;
+}> {
+  const client = readClient();
+  const read = (functionName: string) =>
+    client.readContract({ address: STANDING, functionName, args: [] });
+
+  const [capture, snapshot, assess] = await Promise.all([
+    read("fee_value"),
+    read("snapshot_fee"),
+    read("assess_fee"),
+  ]);
+
+  return {
+    capture: BigInt(capture as bigint),
+    snapshot: BigInt(snapshot as bigint),
+    assess: BigInt(assess as bigint),
+  };
+}
+
+/** Wei to a short GEN string, for prices only. Never for anything settled. */
+export function formatGen(wei: bigint): string {
+  const whole = Number((wei * 10000n) / 10n ** 18n) / 10000;
+  return String(whole);
+}
+
+/** A contract's url in this product. Mirrors `_contract_uri` in the contract. */
+export const CONTRACT_SCHEME = "genlayer://";
+
+export function contractUri(address: string): string {
+  return CONTRACT_SCHEME + address.toLowerCase();
+}
+
+export function isContractUri(url: string): boolean {
+  return url.startsWith(CONTRACT_SCHEME);
+}
+
+/**
+ * The view methods of another contract that can be snapshotted.
+ *
+ * Only the readonly ones that take no arguments: a method with parameters has
+ * no single answer to record, and a write method would cost money and change
+ * the thing being observed.
+ *
+ * Retried, because a single dropped rpc call here would report a perfectly good
+ * contract as unreadable — and this runs once per line of a pasted list, so at
+ * ten contracts a one-in-twenty failure rate is a coin flip on the whole batch.
+ */
+export async function contractViewMethods(
+  address: string,
+  attempts = 3
+): Promise<string[]> {
+  const client = readClient();
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const schema: any = await client.getContractSchema(address as `0x${string}`);
+      const methods = schema?.methods ?? {};
+      return Object.keys(methods)
+        .filter(
+          (name) =>
+            methods[name]?.readonly === true &&
+            (methods[name]?.params ?? []).length === 0 &&
+            !name.startsWith("_")
+        )
+        .sort();
+    } catch (e) {
+      const msg = String((e as any)?.message ?? e);
+      const transient = /fetch failed|ECONNRESET|ETIMEDOUT|unknown RPC/i.test(msg);
+      if (!transient || i === attempts) throw e;
+      await new Promise((r) => setTimeout(r, 800 * i));
+    }
+  }
+  return [];
+}
+
+/**
+ * Snapshot several contracts in one transaction.
+ *
+ * Batching is only possible because a snapshot is deterministic — no render, no
+ * model, just cross contract reads. Page captures cannot go this way and are
+ * queued one transaction each by the caller.
+ */
+export async function notarizeContracts(opts: {
+  address: `0x${string}`;
+  targets: string[];
+  methodSets: string[][];
+  onStage?: (s: WriteStage, note?: string) => void;
+}): Promise<{ hash: string; count: number }> {
+  const { address, targets, methodSets, onStage } = opts;
+  const provider = (globalThis as any).ethereum;
+  if (!provider) throw new Error("no_wallet");
+  if (!IS_LIVE) throw new Error("not_deployed");
+  if (targets.length === 0) throw new Error("nothing_to_add");
+
+  const client = writeClient(address, provider);
+
+  const unit = (await client.readContract({
+    address: STANDING,
+    functionName: "snapshot_fee",
+    args: [],
+  })) as bigint;
+
+  onStage?.("signing");
+
+  const hash = await client.writeContract({
+    address: STANDING,
+    functionName: "notarize_contracts",
+    args: [targets, methodSets.map((m) => m.join(","))],
+    value: BigInt(unit) * BigInt(targets.length),
+  });
+
+  onStage?.("sent", `reading the state of ${targets.length} contracts`);
+
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.ACCEPTED,
+  });
+  onStage?.("accepted");
+
+  await client.waitForTransactionReceipt({
+    hash,
+    status: TransactionStatus.FINALIZED,
+  });
+  onStage?.("finalized");
+
+  return { hash, count: targets.length };
+}
+
+/**
  * Ask the network whether the change between two captures was substantive.
  *
  * This is the one call in the product that is a judgment rather than a record.

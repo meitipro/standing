@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "target": "es2017",
+    // es2020, not es2017: this codebase does arithmetic on chain values, which
+    // are BigInt. Under es2017 a literal like `0n` does not compile, forcing
+    // every such expression through BigInt(0) — and the code that adds up what
+    // someone is about to spend should be the most readable code here.
+    "target": "es2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,

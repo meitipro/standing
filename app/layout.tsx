@@ -120,6 +120,9 @@ export default function RootLayout({
                   color: "var(--muted)",
                 }}
               >
+                <Link href="/bulk" style={{ color: "inherit" }}>
+                  Bulk
+                </Link>
                 <Link href="/verify" style={{ color: "inherit" }}>
                   Verify
                 </Link>
@@ -187,6 +190,7 @@ export default function RootLayout({
                   color: "var(--slab-muted)",
                 }}
               >
+                <Link href="/bulk">Bulk</Link>
                 <Link href="/verify">Verify</Link>
                 <Link href="/watch">Watch</Link>
                 <Link href="/api">API</Link>

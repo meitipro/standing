@@ -30,6 +30,20 @@ MAX_URL = 2048
 # prompt and no render, so it is priced under a capture rather than at it.
 ASSESS_DIVISOR = 2
 
+# A contract snapshot is cheaper still: no render, no model, just cross contract
+# reads, which are part of deterministic execution.
+SNAPSHOT_DIVISOR = 4
+
+# What a snapshotted contract's url looks like. A scheme rather than a flag
+# because it is self describing everywhere it lands — in storage, in the watch
+# index, in an api payload and in a citation somebody pastes into an article.
+CONTRACT_SCHEME = "genlayer://"
+
+MAX_STATE_METHODS = 8
+MAX_VALUE_CHARS = 120
+MAX_METHOD_CHARS = 64
+MAX_BULK_TARGETS = 10
+
 MAX_CHANGES = 6
 MAX_CHANGE_CHARS = 160
 MAX_SUMMARY = 220
@@ -201,6 +215,9 @@ class Contract(gl.Contract):
         if len(text) < 19:
             raise gl.vm.UserError("node supplied an unreadable datetime")
         return text[:19]
+
+    def _snapshot_price(self) -> u256:
+        return u256(int(self.fee) // SNAPSHOT_DIVISOR)
 
     def _assess_price(self) -> u256:
         """Derived from the capture fee rather than stored separately.
@@ -547,6 +564,146 @@ class Contract(gl.Contract):
             raise gl.vm.UserError("only owner")
         self.owner = new_owner
 
+    # ---------- contract snapshots ----------
+
+    def _snapshot(self, target: Address, names: list) -> dict:
+        """Read another contract's public state and shape it like a capture.
+
+        No equivalence principle, and that is the point rather than an omission:
+        a cross contract read is part of deterministic execution, so every
+        validator computes the identical bytes. That makes a snapshot's digest
+        strictly stronger evidence than a page capture's — the text digest of a
+        page is agreed by comparison, this one cannot differ in the first place.
+
+        A failing method aborts the whole snapshot rather than being skipped. A
+        record with a method quietly missing looks exactly like a contract that
+        never had it, and this product exists to not do that.
+        """
+        proxy = gl.get_contract_at(target).view()
+
+        lines = []
+        for name in names:
+            try:
+                value = getattr(proxy, name)()
+            except Exception:
+                raise gl.vm.UserError(
+                    "that contract has no readable view method called " + name
+                )
+            lines.append(_state_line(name, value))
+
+        canonical = "\n".join(lines)
+        return {
+            "claims": lines,
+            "text": canonical,
+            "text_digest": hashlib.sha256(canonical.encode()).hexdigest(),
+        }
+
+    def _record_snapshot(self, target: Address, res: dict) -> u256:
+        cert_id = u256(len(self.certs))
+        self.certs.append(
+            Cert(
+                url=_contract_uri(target),
+                title="",
+                claims=[str(c) for c in res["claims"]],
+                text_digest=str(res["text_digest"]),
+                # No screenshot exists, and an empty string is the honest value.
+                # The site reads this to mean "not applicable" rather than
+                # printing a digest of nothing.
+                shot_digest="",
+                cloaking=False,
+                # Deterministic, so there was no threshold to clear. Full marks
+                # is the truthful number here, not the governance one.
+                threshold_bps=u256(BPS),
+                text_chars=u256(len(str(res["text"]))),
+                # Not an http capture. Zero rather than a borrowed 200.
+                status_code=u256(0),
+                at=self._now(),
+                requester=gl.message.sender_address,
+                watch_id=u256(0),
+                watched=False,
+            )
+        )
+        digest = str(res["text_digest"])
+        if self.cert_by_text_digest.get(digest, u256(2**256 - 1)) == u256(2**256 - 1):
+            self.cert_by_text_digest[digest] = cert_id
+
+        CertificateIssued(
+            cert_id,
+            gl.message.sender_address,
+            url=_contract_uri(target),
+            title="",
+            text_digest=digest,
+            shot_digest="",
+            cloaking=False,
+            claims=[str(c) for c in res["claims"]],
+        ).emit()
+        return cert_id
+
+    @gl.public.write.payable
+    def notarize_contract(self, target: Address, methods: list) -> u256:
+        """Record what another intelligent contract currently says."""
+        names = _check_methods(methods)
+
+        price = self._snapshot_price()
+        if gl.message.value < price:
+            raise gl.vm.UserError("fee too low")
+        if int(gl.message.value) > int(price) * 2:
+            raise gl.vm.UserError("value is more than twice the fee, read snapshot_fee() and resend")
+
+        res = self._snapshot(target, names)
+
+        # ---- nothing above this line may touch storage ----
+        self.fees_accrued = u256(int(self.fees_accrued) + int(gl.message.value))
+        return self._record_snapshot(target, res)
+
+    @gl.public.write.payable
+    def notarize_contracts(self, targets: list, method_sets: list) -> list:
+        """Snapshot several contracts in one transaction.
+
+        Only possible because a snapshot is deterministic. Page captures cannot
+        be batched this way — each one runs two renders and a vision prompt on
+        every validator, so a batch of ten would be ten times a job that already
+        takes the better part of a minute. Those stay one transaction each, and
+        the site queues them.
+
+        `method_sets[i]` is a comma separated list of the methods to read from
+        `targets[i]`. Parallel arrays rather than nested ones because these are
+        heterogeneous contracts: a shared method list would only ever suit
+        several instances of the same thing.
+        """
+        if len(targets) == 0:
+            raise gl.vm.UserError("name at least one contract")
+        if len(targets) > MAX_BULK_TARGETS:
+            raise gl.vm.UserError(
+                "at most " + str(MAX_BULK_TARGETS) + " contracts in one transaction"
+            )
+        if len(targets) != len(method_sets):
+            raise gl.vm.UserError("every contract needs its own list of methods")
+
+        price = u256(int(self._snapshot_price()) * len(targets))
+        if gl.message.value < price:
+            raise gl.vm.UserError("fee too low")
+        if int(gl.message.value) > int(price) * 2:
+            raise gl.vm.UserError("value is more than twice the fee, read snapshot_fee() and resend")
+
+        # Every read happens before any write, so a contract that fails halfway
+        # through the batch takes nothing with it and charges nothing.
+        pending = []
+        for i in range(len(targets)):
+            addr = targets[i]
+            if not isinstance(addr, Address):
+                raise gl.vm.UserError("that is not a contract address")
+            names = _check_methods(str(method_sets[i]).split(","))
+            pending.append(self._snapshot(addr, names))
+
+        # ---- nothing above this line may touch storage ----
+        self.fees_accrued = u256(int(self.fees_accrued) + int(gl.message.value))
+
+        out = []
+        for i in range(len(targets)):
+            out.append(self._record_snapshot(targets[i], pending[i]))
+        return out
+
     # ---------- assessment ----------
 
     def _assess(self, url: str, before: list, after: list) -> dict:
@@ -735,6 +892,10 @@ class Contract(gl.Contract):
         return self._assess_price()
 
     @gl.public.view
+    def snapshot_fee(self) -> u256:
+        return self._snapshot_price()
+
+    @gl.public.view
     def certificate(self, cert_id: u256) -> dict:
         c = self._require_cert(cert_id)
         return {
@@ -884,6 +1045,76 @@ def _normalise_claims(raw) -> list:
 
 def _clean_title(raw) -> str:
     return " ".join(str(raw).strip().split())[:MAX_TITLE]
+
+
+def _contract_uri(target: Address) -> str:
+    return CONTRACT_SCHEME + target.as_hex.lower()
+
+
+def _is_contract_uri(url: str) -> bool:
+    return url.startswith(CONTRACT_SCHEME)
+
+
+def _check_methods(raw) -> list:
+    """The view methods to read, cleaned and deduped, order preserved.
+
+    Order is preserved rather than sorted because a contract's own method order
+    is how its author grouped them, and a snapshot reads better in that order.
+    The claim list built from these is sorted later by the same normaliser every
+    other capture goes through, so agreement is unaffected either way.
+    """
+    out = []
+    seen = set()
+    for m in raw:
+        name = str(m).strip()
+        if name == "":
+            continue
+        if len(name) > MAX_METHOD_CHARS:
+            raise gl.vm.UserError("that method name is too long to be real")
+        # A view method is an identifier. Anything else is either a mistake or
+        # somebody trying to reach a method that takes arguments.
+        if not name.replace("_", "").isalnum():
+            raise gl.vm.UserError("method names may only be letters, digits and underscores")
+        if name.startswith("_"):
+            raise gl.vm.UserError("private methods cannot be snapshotted")
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+        if len(out) >= MAX_STATE_METHODS:
+            break
+    if len(out) == 0:
+        raise gl.vm.UserError("name at least one view method to snapshot")
+    return out
+
+
+def _render_value(v) -> str:
+    """One value, rendered the same way on every node.
+
+    Every branch here has to be deterministic, because unlike a page capture
+    this is not going through an equivalence principle — a cross contract read
+    is part of deterministic execution, so the digest below binds to bytes that
+    every validator produced identically. Dict keys are sorted for exactly that
+    reason: two nodes must not disagree because a mapping iterated differently.
+    """
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(int(v))
+    if isinstance(v, Address):
+        return v.as_hex.lower()
+    if isinstance(v, str):
+        return " ".join(v.strip().split())
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(_render_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        keys = sorted(str(k) for k in v.keys())
+        return "{" + ", ".join(k + ": " + _render_value(v[k]) for k in keys) + "}"
+    return " ".join(str(v).strip().split())
+
+
+def _state_line(name: str, value) -> str:
+    return (name + " = " + _render_value(value))[:MAX_VALUE_CHARS]
 
 
 def _clean_summary(raw) -> str:

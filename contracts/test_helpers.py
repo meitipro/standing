@@ -60,8 +60,31 @@ def _install_genlayer_stub() -> None:
     class TreeMap(dict, _Generic):
         pass
 
+    class Address:
+        """A real class, not an alias for str.
+
+        It was `str` here until the state renderer needed telling apart from a
+        plain string: `isinstance(v, Address)` is checked before the str branch,
+        so aliasing the two made every string render as an address and blow up
+        on `.as_hex`. A stub that collapses two types the code distinguishes
+        cannot test the code that distinguishes them.
+        """
+
+        def __init__(self, hex_str: str):
+            self._hex = str(hex_str)
+
+        @property
+        def as_hex(self) -> str:
+            return self._hex
+
+        def __eq__(self, other):
+            return isinstance(other, Address) and other._hex == self._hex
+
+        def __hash__(self):
+            return hash(self._hex)
+
     gl.gl = glns
-    gl.Address = str
+    gl.Address = Address
     gl.u256 = int
     gl.i64 = int
     gl.DynArray = DynArray
@@ -304,6 +327,92 @@ check("pair key is ordered, not a set", standing._pair_key(9, 3), "9:3")
 
 check("summary collapses whitespace", standing._clean_summary("  a   b \n c "), "a b c")
 check("summary is capped", len(standing._clean_summary("x" * 999)), standing.MAX_SUMMARY)
+
+# ---------- _check_methods ----------
+
+check("keeps order and dedupes", standing._check_methods(["b", "a", "b"]), ["b", "a"])
+check("trims", standing._check_methods([" fee_value "]), ["fee_value"])
+check("drops empties", standing._check_methods(["", "  ", "ok_one"]), ["ok_one"])
+check(
+    "caps the count",
+    len(standing._check_methods(["m" + str(i) for i in range(30)])),
+    standing.MAX_STATE_METHODS,
+)
+
+
+def _raises(fn) -> bool:
+    try:
+        fn()
+        return False
+    except Exception:
+        return True
+
+
+check("empty list raises", _raises(lambda: standing._check_methods([])), True)
+check("all-blank raises", _raises(lambda: standing._check_methods(["", " "])), True)
+check("private method raises", _raises(lambda: standing._check_methods(["_secret"])), True)
+check(
+    "a method with arguments raises",
+    _raises(lambda: standing._check_methods(["certificate(1)"])),
+    True,
+)
+check(
+    "a method with a space raises",
+    _raises(lambda: standing._check_methods(["fee value"])),
+    True,
+)
+check(
+    "an over long name raises",
+    _raises(lambda: standing._check_methods(["x" * 200])),
+    True,
+)
+
+# ---------- _render_value ----------
+#
+# Every branch has to be deterministic: unlike a page capture this never goes
+# through an equivalence principle, so two nodes rendering differently would
+# produce two different digests of the same state.
+
+check("bool is lowercase", standing._render_value(True), "true")
+check("false too", standing._render_value(False), "false")
+check("bool is checked before int", standing._render_value(False) != "0", True)
+check("int", standing._render_value(42), "42")
+check("string collapses whitespace", standing._render_value("  a   b "), "a b")
+check(
+    "address renders lowercase hex",
+    standing._render_value(standing.Address("0xABCdef")),
+    "0xabcdef",
+)
+check("list", standing._render_value([1, 2]), "[1, 2]")
+check("nested list", standing._render_value([[1], [2]]), "[[1], [2]]")
+
+# The one that matters most: two nodes must not disagree because a mapping
+# happened to iterate in a different order.
+check(
+    "dict keys are sorted",
+    standing._render_value({"b": 1, "a": 2}),
+    standing._render_value({"a": 2, "b": 1}),
+)
+check("dict renders sorted", standing._render_value({"b": 1, "a": 2}), "{a: 2, b: 1}")
+
+# ---------- _state_line ----------
+
+check("state line joins name and value", standing._state_line("fee", 5), "fee = 5")
+check(
+    "state line is capped",
+    len(standing._state_line("x", "y" * 500)),
+    standing.MAX_VALUE_CHARS,
+)
+
+# ---------- contract uris ----------
+
+check(
+    "uri is scheme plus lowercase address",
+    standing._contract_uri(standing.Address("0xABCd")),
+    "genlayer://0xabcd",
+)
+check("a contract uri is recognised", standing._is_contract_uri("genlayer://0xabcd"), True)
+check("an http url is not", standing._is_contract_uri("https://example.com"), False)
 
 # ---------- report ----------
 
