@@ -189,6 +189,84 @@ export default async function VerifyPage({ searchParams }: Search) {
       </section>
 
       <section style={{ marginTop: 44 }}>
+        <h2 className="h3">Verdicts are a different kind of record</h2>
+        <p className="small muted pretty" style={{ marginTop: 10, maxWidth: "68ch" }}>
+          A certificate records what a page said. A verdict is the network
+          answering a question about two of them: did the substance change
+          between these captures? That is a judgment rather than an
+          observation, and it is worth being precise about what it is worth.
+        </p>
+
+        <div className="cols" style={{ marginTop: 18 }}>
+          <div>
+            <p className="eyebrow eyebrow-accent" style={{ marginBottom: 14 }}>
+              What a verdict settles
+            </p>
+            <ul className="ledger" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              <li className="ledger-yes">
+                <span className="sign" aria-hidden="true">+</span>
+                <span>
+                  Several validators each compared the same two claim sets and
+                  independently reached the same word.
+                </span>
+              </li>
+              <li className="ledger-yes">
+                <span className="sign" aria-hidden="true">+</span>
+                <span>
+                  For a material verdict, they also agreed on which values
+                  moved — not merely that something felt different.
+                </span>
+              </li>
+              <li className="ledger-yes">
+                <span className="sign" aria-hidden="true">+</span>
+                <span>
+                  It is bound to two specific certificates, so anyone can read
+                  both and check the reasoning themselves.
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="eyebrow" style={{ marginBottom: 14 }}>
+              What it does not settle
+            </p>
+            <ul className="ledger" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              <li className="ledger-no">
+                <span className="sign" aria-hidden="true">&minus;</span>
+                <span>
+                  <strong>Why the page changed.</strong> A verdict names what
+                  moved. It never claims an intention.
+                </span>
+              </li>
+              <li className="ledger-no">
+                <span className="sign" aria-hidden="true">&minus;</span>
+                <span>
+                  That either capture is true. It compares two records of what
+                  was said, not the world.
+                </span>
+              </li>
+              <li className="ledger-no">
+                <span className="sign" aria-hidden="true">&minus;</span>
+                <span>
+                  That nothing else changed. It reads the claim sets, which are
+                  capped at eight claims a capture.
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="notice" style={{ marginTop: 20, maxWidth: "68ch" }}>
+          <strong>No verdict is not a verdict of &ldquo;unchanged&rdquo;.</strong>{" "}
+          Assessments only exist where somebody paid to ask for one, so a pair
+          with nothing against it means the question was never put — not that
+          the network looked and found nothing. The api answers those two cases
+          differently on purpose.
+        </div>
+      </section>
+
+      <section style={{ marginTop: 44 }}>
         <h2 className="h3">If you want to dispute one</h2>
         <p className="small muted" style={{ marginTop: 10, maxWidth: "68ch" }}>
           Recapturing a page is cheaper than appealing a capture, so for a single

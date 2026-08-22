@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { getCertificate } from "@/lib/store";
+import { assessmentForPair, getCertificate, historyForUrl } from "@/lib/store";
 import { displayUrl, splitIso } from "@/lib/format";
 
 /**
@@ -67,6 +67,19 @@ export default async function Image({ params }: { params: { id: string } }) {
   }
 
   const { d, t } = splitIso(cert.at);
+
+  /* The verdict on this capture against the one before it, if anyone has asked.
+   * Wrapped so a card never fails over an optional decoration: an open graph
+   * image that 500s costs the share entirely, and the verdict is the least
+   * important thing on it. */
+  let verdict = null;
+  try {
+    const history = await historyForUrl(cert.url);
+    const i = history.findIndex((c) => c.id === cert.id);
+    if (i > 0) verdict = await assessmentForPair(history[i - 1].id, cert.id);
+  } catch {
+    verdict = null;
+  }
 
   return new ImageResponse(
     (
@@ -153,6 +166,30 @@ export default async function Image({ params }: { params: { id: string } }) {
               ? `, including: “${cert.claims[0].slice(0, 104)}”`
               : "."}
           </span>
+
+          {/* A material verdict is the most quotable thing this product makes,
+              and the card is where most people will meet it. Only material is
+              promoted: "reworded" and "unchanged" are reassurances, and a card
+              shouting one of those would be noise on every share. */}
+          {verdict && verdict.verdict === "material" && (
+            <span
+              style={{
+                display: "flex",
+                fontSize: 20,
+                lineHeight: 1.4,
+                marginTop: 22,
+                paddingLeft: 16,
+                borderLeft: `3px solid ${FLAG}`,
+                color: INK,
+                maxWidth: 940,
+              }}
+            >
+              {`The substance changed since capture ${verdict.certA}: ${verdict.changes[0] ?? verdict.summary}`.slice(
+                0,
+                150
+              )}
+            </span>
+          )}
         </div>
 
         {/* foot */}
@@ -191,6 +228,23 @@ export default async function Image({ params }: { params: { id: string } }) {
           >
             {cert.finalized ? "FINALIZED" : "PROVISIONAL"}
           </span>
+          {verdict && (
+            <span
+              style={{
+                display: "flex",
+                fontSize: 15,
+                letterSpacing: 1.2,
+                padding: "5px 12px",
+                borderRadius: 2,
+                border: `1px solid ${
+                  verdict.verdict === "material" ? FLAG : ACCENT
+                }`,
+                color: verdict.verdict === "material" ? FLAG : ACCENT,
+              }}
+            >
+              {verdict.verdict.toUpperCase()}
+            </span>
+          )}
           <div style={{ display: "flex", flex: 1 }} />
           <span style={{ fontSize: 16, color: MUTED }}>
             Proof it was said. Not proof it is true.
