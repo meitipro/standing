@@ -1,219 +1,138 @@
 # The Standing contract
 
-One method matters: `notarize(url)`. Everything else in the product is built on
-calling it repeatedly against the same url.
+`standing.py` is one file with no build step. What is deployed is this file with LF
+line endings.
 
 ```bash
-genvm-lint check contracts/standing.py   # lint
-python contracts/test_helpers.py         # 40 assertions on the pure helpers
+npm run lint:contract                     # genvm-lint check: the AST pass and a load against the SDK
+python contracts/test_helpers.py          # the pure half, 150 checks
+python -m unittest discover -s tests/direct   # the contract against a GenVM double, 61 tests
+python scripts/mutate.py                  # 47 mutants, each must be caught
 ```
 
-`genvm-lint validate` cannot see a class named `Contract` — it skips it by name
-in `validate/sdk_loader.py`, and `Contract` is the GenLayer convention, so every
-real contract reports "No contract class found". To validate for real, copy the
-file and rename the class first:
+## API names, checked against the pinned SDK
 
-```bash
-sed 's/class Contract(gl.Contract)/class StandingNotary(gl.Contract)/' contracts/standing.py > /tmp/v.py && genvm-lint check /tmp/v.py
-```
+The runtime is `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6`.
+Every name below was read from that SDK's source, not from documentation.
 
-That reports **29 methods, 20 view, 9 write, validation passed**.
-
-## The shape
-
-Above `run_nondet` is the non deterministic half: three fetches and one vision
-prompt. Below it is the deterministic half, where storage moves. The line is
-marked in both `notarize` and `capture_watch` and nothing crosses it.
-
-Storage is thin on purpose. A certificate is a title, a claim list, two digests,
-a timestamp and the threshold that was in force. That is what a person could
-testify about, and nothing more.
-
-## What the network actually agrees on
-
-Each validator re-runs the whole capture and compares four things with the
-leader:
-
-| Compared | Rule |
+| Used | For |
 | --- | --- |
-| Claim set | Set overlap ≥ threshold, on normalised claims |
-| Cloaking flag | Exact match |
-| HTTP status | Exact match |
-| Text digest | Recomputed from the bytes the leader shipped |
+| `gl.vm.run_nondet(leader_fn, validator_fn)` | Both blocks. The validator runs sandboxed, and a refusal agrees with a refusal only when the messages match |
+| `gl.vm.Return`, `gl.vm.UserError` | Reading the leader's result, and every refusal |
+| `gl.nondet.web.get(url).status` | The status, before anything expensive |
+| `gl.nondet.web.render(url, mode="text" or "screenshot")` | The text window and the screenshot, which renders as an `Image` with `.raw` |
+| `gl.nondet.exec_prompt(prompt, images=[...], response_format="json")` | The three prompts |
+| `gl.get_contract_at(address).view()` | A snapshot's reads, by name |
+| `gl.get_contract_at(address).emit_transfer(value=...)` | Refunds and withdrawals, sent on finality |
+| `gl.message_raw["datetime"]` | The only clock. There is no block timestamp |
 
-Wording is allowed to differ, substance is not. Strict equality on the text is
-impossible: every fetch differs in ads, ordering and session data, which is the
-entire reason this product needs GenLayer.
+## Consensus
 
-## Ten errors in the brief, and what was done instead
+### A capture
 
-The brief's contract sketch is on pages 7 and 8. Working through it turned up
-ten problems. Two of them stop the contract from running at all.
+The leader fetches the page, renders its text window and a screenshot, and asks its model
+for two to six claims and whether the screenshot shows them. It returns a flat dict of
+two strings: the normalised claims joined by newlines, and `yes` or `no`.
 
-### 1. `hashlib.sha256(shot)` cannot work — crash
+Each validator first reads the page itself and runs the same extraction. That raises the
+same refusal the leader raised when a page is blocked or empty, so a unanimous refusal
+arrives as its sentence rather than as a disagreement. Then it checks:
 
-`gl.nondet.web.render(url, mode='screenshot')` returns
-`gl.nondet.Image`, a dataclass of `raw: bytes` and `pil: PIL.Image`
-(`gl/nondet/__init__.py:36`). `hashlib` cannot digest it. Every call to
-`notarize` would die inside the consensus block.
+1. The proposal is exactly the shape a leader could honestly produce: two keys, string
+   values, claims already normalised, between two and six of them.
+2. Its own image check equals the leader's.
+3. Its own model, shown the numbered claims and this validator's own page text, answers
+   `yes` for every claim.
 
-Fixed: `hashlib.sha256(shot.raw)`.
+A certificate stores exactly the claims that were checked and the image check that was
+compared. Agreement therefore always means the validator found every stored claim on its
+own copy, and `test_helpers.py` confirms it over every proposal and world it builds.
 
-### 2. `DynArray[u256]()` raises by design — crash
+### A judgment of a change
 
-The brief's `watch()` ends with `cert_ids=DynArray[u256]()`. `DynArray.__init__`
-raises `TypeError("this class can't be instantiated by user")` unconditionally
-(`py/storage/vec.py:22`). Every call to `watch` would die.
+The contract takes the claims only the earlier capture has and the claims only the later
+has, and numbers them `c1` onwards, earlier first. It asks the model twice in one block,
+once with each set shown first. Neither record says which capture it came from, because the
+answer does not depend on direction.
 
-Fixed: pass `[]`. `_DynArrayDesc.set` accepts any `Sequence` and copies it into
-storage (`py/storage/vec.py:213`).
+Each answer is `material` with the ids of the lines that carry the difference, or
+`immaterial`. An answer the contract cannot act on, such as a line id the question never
+had or `material` naming no line, counts as `unclear`. The block resolves to the answer
+both orders gave, or `unclear` when they differ, and validators compare that resolved
+answer exactly. The stored verdict and lines are the compared value.
 
-### 3. The digests were not checked by anyone — forgeable evidence
+The question is filed under a digest of the url and both sets of lines, so the same change
+is answered once whichever pair asks it.
 
-This is the serious one. In the brief, `leader_fn` computes `text_digest` and
-`shot_digest`, but `validator_fn` compares only the claim overlap and the match
-flag. Nothing binds either digest to anything. A leader could return the digest
-of a file it invented, every validator would agree, and the chain would carry it
-forever as evidence.
+### A contract snapshot
 
-That voids the product's central promise — that "anyone can check the file they
-were given is the file that was captured" (page 7). A digest nobody verified is
-not evidence, it is a number.
+A cross contract read is part of deterministic execution, so every validator computes the
+same lines and there is no block. Each line is `name = value`, with values rendered the same
+way on every node and mapping keys sorted.
 
-Fixed for the text: the leader ships the exact 14,000 character window inside
-the proposal, every validator recomputes `sha256` over it and compares, and the
-window is dropped before storage. The chain keeps only the digest. This also
-makes the evidence bundle real — the agreed bytes exist in the consensus data,
-so the indexer can publish the exact text the digest refers to.
+## Storage
 
-Not fixed for the screenshot, and it cannot be: two browsers never produce
-identical pixels for the same page, so byte equality would fail on every honest
-capture. The screenshot digest is the leader's, and every surface that displays
-it says so in those words. The vision check still constrains the leader — the
-image it hashed has to show the same claims the validators independently found.
+No storage dataclass holds a collection. A `DynArray` inside one cannot be instantiated by
+user code on a node, while every host-side check passes it. So:
 
-A perceptual hash with a tolerance would close more of this gap. It is not here
-because the threshold would be a guess. On the previous product in this series
-a dHash was built, measured, and removed on the evidence: re-encoding the same
-image scored *further apart* than two genuinely different images. The same
-measurement has to be done on real captures before a number goes in. Until then
-an unmeasured threshold would mostly manufacture false disagreements, which is
-the exact failure page 6 is worried about.
+- a certificate's claims are `(claim_first, claim_count)` into one flat `claim_text` array;
+- a watch's captures are a linked list through `Cert.watch_next`, from `first_cert` to
+  `last_cert`;
+- a url's history is a linked list through `Cert.url_prev`, from `latest_of_url[url]`.
 
-### 4. `run_nondet_unsafe` turns honest refusals into bare disagreements
+Every field in the contract and the three dataclasses carries a `#:` comment saying what
+it holds.
 
-The brief raises `UserError("no claims extracted, page may be empty or
-blocked")` inside `leader_fn`, then uses `run_nondet_unsafe` with a validator
-that opens `if not isinstance(leader_res, gl.vm.Return): return False`.
+## Who may write
 
-So when a page is genuinely blocked, the leader raises, every validator returns
-False, and the transaction fails as a consensus disagreement with no message.
-The frontend chapter asks for the opposite: "Surface the contract error string
-verbatim, since these are written for humans" (page 9).
+| Method | Price | Who |
+| --- | --- | --- |
+| `notarize(url)` | the fee | anyone; the payer is stored as requester |
+| `notarize_contracts(targets, method_sets)` | a quarter of the fee, each | anyone; the payer is stored as requester |
+| `watch(url, cadence_hours)` | the fee per capture, 4 to 400 | anyone; the sender becomes the owner |
+| `capture_watch(watch_id)` | free | anyone, once a capture is due |
+| `top_up_watch(watch_id)` | the watch's own price per capture | the watch's owner |
+| `close_watch(watch_id)` | free | the watch's owner, refunded what the watch holds |
+| `assess(cert_a, cert_b)` | half the fee | anyone, once per change |
+| `set_fee`, `withdraw_fees`, `transfer_ownership` | free | the contract owner |
 
-Fixed two ways. `gl.vm.run_nondet` compares user errors by message and
-propagates a unanimous one (`gl/vm.py:191`). And `validator_fn` calls
-`leader_fn()` on its **first** line, before it looks at the leader's result, so
-a validator that also finds the page blocked raises the same message instead of
-voting no. Ordering those two lines the other way round quietly breaks it.
+`tests/direct/test_static.py` parses the source and fails if a write neither checks its
+sender nor appears in its list of open methods, each listed with its reason.
 
-Every refusal message is therefore a constant. Interpolating a node-specific
-value into one would stop the messages matching and reintroduce the bug.
+Views return JSON with sorted keys, and wei amounts as strings: `stats`, `certificate`,
+`certificates`, `history`, `cert_for_digest`, `watch_record`, `watches_page`,
+`watch_for_url`, `assessment`, `assessment_for_pair`. An absent record reads as `null`.
 
-### 5. `agreement_bps` claims to be something a contract cannot know
+## Refusals
 
-The field is commented "overlap actually achieved, stored for the record", but
-the code assigns `self.overlap_bps`, the threshold. The two are different
-numbers and only one of them is knowable: a contract cannot see how many
-validators agreed or by how much. That lives in the consensus layer.
+Every refusal is a module constant, and a static test holds that. The ones raised inside a
+block have to be: a node-specific value in the message would turn a unanimous refusal into
+a disagreement. The url refusals are mirrored word for word in `lib/url.ts`, and the parity
+test compares them.
 
-The screens inherit the confusion — the home page prints "4 of 5 validators
-matched" and the certificate prints "4 of 5 matched, threshold 60 percent",
-neither of which the contract can produce.
+## Traps worth knowing
 
-Fixed by naming the field `threshold_bps` and having the UI say only what is
-true: the threshold that was in force, and that the capture cleared it. The
-`AgreementMeter` component reads as a threshold gauge, not a vote count.
+- **Name the class after the product.** `genvm-lint validate` skips a class named
+  `Contract`, and reports "No contract class found" for a contract that is fine.
+- **Pin the GenVM bundle.** The linter loads the newest bundle in its cache, and a later
+  one does not ship this runtime. `scripts/lint-contract.mjs` sets `GENVM_VERSION`.
+- **Only printable ascii urls.** Python's urlsplit and a browser's url parser disagree
+  outside that range and on bracketed hosts, and one disagreement is enough for a lookup
+  by url to miss. Refusing both is what lets the browser's copy of the guard agree exactly.
+- **Checksummed addresses.** Studio reads a lowercased contract address as one that does
+  not exist, so snapshot urls keep the checksummed form and the site sends it.
+- **A string, not an Address, for address parameters.** genlayer-js sends a hex string as
+  a string.
+- **Refunds on studionet.** An `emit_transfer` payout has been measured on another contract
+  not to credit the payee there. The contract's accounting is right either way; check the
+  recipient's balance after a close.
 
-### 6. `certificate()` omits `text_digest`
+## Deploying
 
-The view returns url, title, claims, shot_digest, cloaking, agreement_bps and
-at. The certificate screen on page 13 displays "text window sha256 77ab...31c9",
-which that view cannot supply.
+```bash
+npm run deploy -- --network=studio      # reads STANDING_DEPLOYER_KEY from the shell
+npm run verify -- 0xADDRESS --network=studio
+npm run match -- 0xADDRESS --network=studio
+```
 
-Fixed: the view returns every stored field, including `text_chars` and
-`status_code`.
-
-### 7. A watch could never produce a timeline
-
-`Watch.cert_ids` is created empty and nothing ever appends to it. There is no
-method that takes a capture and files it under a watch, so `/w/[id]` — a full
-screen, and the revenue line the brief calls "the highest margin line in the
-product" — has no data source.
-
-Fixed with `capture_watch(watch_id)`: spends one prepaid capture, appends the
-certificate id, stamps `last_checked`, and emits `WatchCaptured` carrying the
-added and removed claims so the indexer gets the diff without recomputing it.
-It is callable by anyone once the cadence is due. The owner has already paid,
-the schedule is on chain, and the caller earns nothing, so leaving it open means
-the schedule does not depend on one worker process staying alive.
-
-### 8. Prepaid captures were treated as revenue
-
-`watch()` takes four captures of prepay up front. In the brief that money lands
-in the same undifferentiated balance as fees, with no withdraw method at all —
-so it is simultaneously unreachable and, the moment one is added, spendable by
-the owner before the captures are delivered.
-
-Fixed: `prepaid_held` and `fees_accrued` are separate. A watch's prepay is a
-liability, and only the change moves to fees. Each capture moves exactly one fee
-across. `withdraw_fees` can only ever reach `fees_accrued`, and `close_watch`
-refunds unspent credits.
-
-### 9. Nothing refused a url before payment
-
-Page 15 lists "only public pages are supported, checked and refused before
-payment" as the answer to the paywall risk, but no check exists.
-
-Worse, every validator fetches whatever url it is handed, which makes an
-unguarded contract a way to point the whole validator set at an address of the
-requester's choosing. `_check_url` refuses non-http schemes, urls carrying
-credentials, loopback, link-local, cloud metadata, the three private ranges and
-names with no public dot, and it runs before the fee is taken.
-
-It also normalises: the fragment is dropped, because it never reaches the server
-and would otherwise let one page look like two in the watch index.
-
-### 10. The claim cap was applied after sorting
-
-`sorted({...})[:8]` sorts alphabetically and then keeps the first eight, so a
-page whose important claims start with late letters loses them to whatever began
-with "a". The model returns claims in its own order of importance.
-
-Fixed: cap in the model's order, then sort. There is a test pinning this.
-
-## Two smaller changes
-
-A `404` renders as a page with text on it, and a model will summarise it
-happily. The brief wants the status code on the failure path, so the leader
-makes one cheap `web.request` before anything expensive runs, and the status
-travels with the proposal and is compared exactly.
-
-`MIN_CLAIMS = 2` implements page 6's "the claim list is thin and the capture is
-refused" for consent walls, which otherwise render as one line of boilerplate.
-
-## Prompt injection
-
-The page text and the screenshot are attacker controlled. The prompt says so,
-in those words, and tells the model to ignore any instruction inside them. That
-is necessary but not sufficient — the real defence is structural, and it is that
-an injected instruction has to land identically on independent nodes running the
-capture separately to survive the overlap check.
-
-## Not done
-
-Deployment. It needs a funded Bradbury account, which means a keystore password
-and a faucet visit, both of which are the user's to make. Constructor arguments
-are `fee` and `overlap_bps`; the brief's numbers are 0.4 GEN and 6000.
-
-`min_gas` is deliberately unset until there are real gas figures to set it from.
+The constructor takes one argument, the capture price in wei, at least four.

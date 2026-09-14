@@ -1,27 +1,41 @@
 {
   "name": "standing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "description": "A notary for public web pages and intelligent contracts on GenLayer. Every validator checks every claim against its own copy of the page.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meitipro/standing.git"
+  },
+  "type": "module",
   "scripts": {
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start -p 3200",
-    "lint": "next lint",
-    "deploy": "node scripts/deploy.mjs",
+    "typecheck": "tsc --noEmit",
     "check": "node scripts/check.mjs",
-    "tx": "node scripts/tx.mjs",
-    "test": "node lib/bulk.test.mjs && python contracts/test_helpers.py"
+    "lint:contract": "node scripts/lint-contract.mjs",
+    "test": "node scripts/check.mjs && node --test \"tests/parity/*.test.mjs\" && python -m unittest discover -s tests/direct && python contracts/test_helpers.py",
+    "mutate": "python scripts/mutate.py --table docs/MUTATIONS.md",
+    "deploy": "node scripts/deploy.mjs",
+    "verify": "node scripts/verify.mjs",
+    "match": "node scripts/match.mjs",
+    "tx": "node scripts/tx.mjs"
   },
   "dependencies": {
     "genlayer-js": "^1.2.0",
     "next": "^14.2.32",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "viem": "^2.55.10"
   },
   "devDependencies": {
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "typescript": "5.5.3"
+  },
+  "engines": {
+    "node": ">=18.18"
   }
 }

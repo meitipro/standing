@@ -2,7 +2,10 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+
 import { connectWallet, openWatch, readableError, IS_LIVE } from "@/lib/chain";
+import { formatGen } from "@/lib/format";
+import { LIMITS } from "@/lib/limits";
 import type { WriteStage } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -10,13 +13,11 @@ import type { WriteStage } from "@/lib/types";
 const CADENCES = [
   { hours: 24, label: "daily" },
   { hours: 168, label: "weekly" },
-  { hours: 720, label: "monthly" },
+  { hours: 720, label: "every 30 days" },
   { hours: 1, label: "hourly" },
 ];
 
-const FEE_GEN = 0.4;
-
-export default function WatchForm() {
+export default function WatchForm({ fee }: { fee: string | null }) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -27,40 +28,31 @@ export default function WatchForm() {
   const [error, setError] = useState("");
 
   const busy = stage !== "idle" && stage !== "failed";
-  const total = (captures * FEE_GEN).toFixed(1);
+  const valid = Number.isInteger(captures) && captures >= LIMITS.MIN_WATCH_CAPTURES && captures <= LIMITS.MAX_WATCH_CAPTURES;
+  const total = fee && valid ? formatGen(BigInt(fee) * BigInt(captures)) : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
     if (!url.trim()) {
       setError("Paste a url first.");
       setStage("failed");
       return;
     }
-    if (captures < 4) {
-      setError("A watch is prepaid, and four captures is the minimum.");
+    if (!valid) {
+      setError(`A watch holds between ${LIMITS.MIN_WATCH_CAPTURES} and ${LIMITS.MAX_WATCH_CAPTURES} prepaid captures.`);
       setStage("failed");
       return;
     }
     if (!IS_LIVE) {
-      setError(
-        "The contract is not deployed yet, so a watch cannot be opened. Every watch on this page is sample data."
-      );
+      setError("This site is not pointed at a Standing contract yet.");
       setStage("failed");
       return;
     }
-
     try {
       setStage("signing");
-      const address = (await connectWallet()) as `0x${string}`;
-      const { watchId } = await openWatch({
-        address,
-        url: url.trim(), // normalised inside openWatch
-        cadenceHours: cadence,
-        captures,
-        onStage: setStage,
-      });
+      const address = await connectWallet();
+      const { watchId } = await openWatch({ address, url, cadenceHours: cadence, captures, onStage: setStage });
       router.push(`/w/${watchId}`);
     } catch (e: any) {
       setStage("failed");
@@ -92,13 +84,7 @@ export default function WatchForm() {
           <label className="lbl" htmlFor="cadence">
             Cadence
           </label>
-          <select
-            id="cadence"
-            className="text"
-            value={cadence}
-            onChange={(e) => setCadence(Number(e.target.value))}
-            disabled={busy}
-          >
+          <select id="cadence" className="text" value={cadence} onChange={(e) => setCadence(Number(e.target.value))} disabled={busy}>
             {CADENCES.map((c) => (
               <option key={c.hours} value={c.hours}>
                 {c.label}
@@ -116,8 +102,8 @@ export default function WatchForm() {
             className="text"
             style={{ width: 110 }}
             type="number"
-            min={4}
-            max={400}
+            min={LIMITS.MIN_WATCH_CAPTURES}
+            max={LIMITS.MAX_WATCH_CAPTURES}
             value={captures}
             onChange={(e) => setCaptures(Number(e.target.value))}
             disabled={busy}
@@ -127,7 +113,7 @@ export default function WatchForm() {
         <div className="grow">
           <span className="lbl">Total</span>
           <span className="mono" style={{ fontSize: "var(--s-18)" }}>
-            {total} GEN
+            {total ? `${total} GEN` : "-"}
           </span>
         </div>
 
@@ -137,9 +123,8 @@ export default function WatchForm() {
       </div>
 
       <p className="tiny muted">
-        A watch is prepaid, and unspent captures are refunded when you close it.
-        The schedule lives on chain, so the next capture is due whether or not
-        anything of ours is running.
+        The price per capture is locked when the watch opens. Closing it refunds whatever it
+        still holds, and only the account that opened it can top it up or close it.
       </p>
 
       {error && (

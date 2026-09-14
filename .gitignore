@@ -2,11 +2,18 @@ node_modules
 .next
 out
 build
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+__pycache__
+*.pyc
+.DS_Store
+Thumbs.db
 
 # Every local env file. .env.example is committed on purpose and is the only
 # one that should ever be: it documents the variables and holds no values.
-# STANDING_DEPLOYER_KEY in particular is a spending key and belongs in the
-# shell for the length of one command, never in a file in the tree.
+# STANDING_DEPLOYER_KEY is a spending key and belongs in the shell for the
+# length of one command, never in a file in the tree.
 .env
 .env.local
 .env.*.local
@@ -18,11 +25,9 @@ build
 *.key
 keystore.json
 
-.vercel
-*.tsbuildinfo
-next-env.d.ts
-
-.DS_Store
-Thumbs.db
-__pycache__
-*.pyc
+# ---------------------------------------------------------------- not public
+#
+# The repository shows the work. It is not a deployment kit, so the runbook
+# and the working notes stay local.
+DEPLOY.md
+docs/DOCUMENTATION.md

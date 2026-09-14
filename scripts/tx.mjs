@@ -23,7 +23,7 @@ const EXPLORER = net.explorer;
  * The calldata decoder returns Maps, and JSON.stringify(new Map()) is "{}"
  * no matter what the Map holds. Printing args through JSON therefore reported
  * a deploy that carried [0.4 GEN, 6000] as having sent nothing at all, and a
- * Studio deploy that sent [0, 0] the same way — two different failures, one
+ * Studio deploy that sent [0, 0] the same way - two different failures, one
  * of them not a failure, all displayed identically. Render Maps by hand.
  */
 function showArgs(value) {
@@ -49,7 +49,7 @@ const hash = process.argv[2];
 if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
   console.error("\n  Usage: node scripts/tx.mjs 0xTXHASH");
   console.error("  A transaction hash is 0x followed by 64 hex characters.");
-  console.error("  Copy it whole — a hash short a character looks like a typo");
+  console.error("  Copy it whole - a hash short a character looks like a typo");
   console.error("  for a transaction that does not exist.\n");
   process.exitCode = 1;
 } else {
@@ -68,7 +68,7 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
 
       /* Consensus and execution are two different verdicts and the difference
        * is the whole point of this script. A deployment can be ACCEPTED with
-       * every validator in AGREE — agreeing that the constructor threw. Reading
+       * every validator in AGREE - agreeing that the constructor threw. Reading
        * only the consensus status says "success" about a contract that does not
        * exist. */
       const consensus = tx?.statusName ?? tx?.status ?? "unknown";
@@ -88,15 +88,14 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
       if (failed) {
         console.log("  The deployment FAILED.");
         console.log("");
-        console.log("  Consensus succeeded — the validators agreed with each other");
-        console.log("  that running it raised an error — so nothing was created at");
+        console.log("  Consensus succeeded - the validators agreed with each other");
+        console.log("  that running it raised an error - so nothing was created at");
         console.log("  that address. Nothing to salvage; deploy again.");
         if (argsLookZeroed(args)) {
           console.log("");
-          console.log("  Constructor arguments went out as zeros — the Studio sends");
-          console.log("  0 for every field left empty, and overlap_bps=0 is below");
-          console.log("  the 3000 floor, so __init__ refused it.");
-          console.log("  npm run deploy passes the real values, and prints the address.");
+          console.log("  The constructor argument went out as zero. The Studio sends 0");
+          console.log("  for a field left empty, and a fee under four wei is refused.");
+          console.log("  npm run deploy passes the real value, and prints the address.");
         }
         console.log("");
         console.log(`  ${EXPLORER}tx/${hash}`);
@@ -104,10 +103,10 @@ if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
         process.exitCode = 1;
       } else if (address && /FINISHED/i.test(execution)) {
         console.log("  Deployed. Confirm it really is Standing before using it:");
-        console.log(`  npm run check -- ${address}`);
+        console.log(`  npm run verify -- ${address} --network=${net.name}`);
         console.log("");
       } else {
-        console.log("  Consensus has not finished yet — wait and run this again.");
+        console.log("  Consensus has not finished yet - wait and run this again.");
         console.log("");
         console.log(`  ${EXPLORER}tx/${hash}`);
         console.log("");

@@ -1,0 +1,18 @@
+# Line endings are part of this project's correctness, not a preference.
+#
+# `npm run match` compares contracts/standing.py byte for byte with the source
+# the chain returns for the deployed address. Left alone, git rewrites the file
+# to CRLF on a Windows checkout and LF elsewhere, so the same commit would give
+# two different answers depending on who runs the comparison. Everything is
+# stored and checked out with LF, on every machine.
+
+* text=auto eol=lf
+
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

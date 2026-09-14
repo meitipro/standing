@@ -1,108 +1,125 @@
 /**
- * Read a deployed Standing contract and report whether it is really Standing
- * and whether its constructor arguments landed.
+ * House style, as a check that fails.
  *
- *   node scripts/check.mjs 0xCONTRACT
- *   npm run check -- 0xCONTRACT
+ *   npm run check
  *
- * Read only. It signs nothing, needs no key, and spends nothing — so it is safe
- * to point at any address, including one somebody else deployed.
+ * One connector, the spaced hyphen, and three periods for an ellipsis. Nine
+ * characters are banned outright. Intending to remember has not worked, so
+ * this runs as the first step of `npm test`.
  *
- * Worth running before the address goes into Vercel. A deployment that half
- * worked, or an address copied with a character missing, is far cheaper to
- * find here than after the site is serving it.
+ * Two things to keep right if this is ever edited:
+ *
+ *  1. Every pattern is built from character codes. Written literally, this
+ *     file would contain each character it bans and report itself.
+ *  2. A character is caught in every form that renders as it: the character
+ *     itself, a named or numeric HTML entity, and a JS or CSS escape. A source
+ *     scan that only looks for the character passes an entity that the
+ *     browser then draws.
+ *
+ * The replacements it names are substitutions, never deletions. Deleting a
+ * character that carried meaning is how a truncated address once turned into
+ * valid hex that read as a whole one.
  */
-import { createClient } from "genlayer-js";
-import { pickNetwork } from "./network.mjs";
 
-const GEN = 10n ** 18n;
-const net = pickNetwork();
-const EXPLORER = net.explorer;
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const address = process.argv[2];
+/* fileURLToPath rather than .pathname: this repo lives under a directory with
+   a space in its name, and the raw pathname keeps it percent-encoded. */
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
-  console.error("\n  Usage: node scripts/check.mjs 0xCONTRACT");
-  console.error("  A contract address is 0x followed by 40 hex characters.\n");
-  process.exitCode = 1;
-} else {
-  const client = createClient({ chain: net.chain });
+const AMP = String.fromCharCode(38);
+const SLASH = String.fromCharCode(92);
 
-  const read = (functionName, args = []) =>
-    client.readContract({ address, functionName, args });
+/** [code point, name, what to write instead, entity names that render it] */
+const BANNED = [
+  [0x2014, "em dash", " - ", ["mdash"]],
+  [0x2013, "en dash", " - ", ["ndash"]],
+  [0x2010, "hyphen", "-", ["hyphen", "dash"]],
+  [0x2012, "figure dash", "-", []],
+  [0x2015, "horizontal bar", "-", ["horbar"]],
+  [0x2212, "minus sign", "-", ["minus"]],
+  [0x00b7, "middle dot", " - ", ["middot", "centerdot", "CenterDot"]],
+  [0x2022, "bullet", "-", ["bull", "bullet"]],
+  [0x2026, "ellipsis", "...", ["hellip", "mldr"]],
+];
 
-  const num = (v) => (typeof v === "bigint" ? v : BigInt(v ?? 0));
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, (c) => SLASH + c);
+}
 
-  try {
-    /* One probe first, alone, then the rest together. The sdk prints its own
-     * rpc error for every failed call, so firing all six at a dead address
-     * buries this script's actual message under six identical stack traces. */
-    const fee = await read("fee_value");
+/** Every spelling of one character that ends up on screen as that character. */
+function patternFor(code, entities) {
+  const hex = code.toString(16);
+  const four = hex.padStart(4, "0");
+  const exact = [String.fromCodePoint(code), ...entities.map((name) => AMP + name + ";")];
+  const loose = [
+    AMP + "#" + code + ";",
+    AMP + "#x0*" + hex + ";",
+    SLASH + SLASH + "u" + four,
+    SLASH + SLASH + "u\\{0*" + hex + "\\}",
+    SLASH + SLASH + "0*" + hex + "(?![0-9a-f])",
+  ];
+  if (code < 0x100) loose.push(SLASH + SLASH + "x" + hex);
+  const exactPart = exact.map(escapeRegExp).join("|");
+  return {
+    exact: new RegExp(exactPart, "g"),
+    loose: new RegExp(loose.map((p) => p.replace(AMP + "#", escapeRegExp(AMP + "#"))).join("|"), "gi"),
+  };
+}
 
-    /* fee_value and overlap_bps_value are the two constructor arguments read
-     * back. If these answer at all, the address holds a contract with
-     * Standing's shape; if they also carry the intended numbers, the deploy
-     * did what it was told. */
-    const [overlap, certs, watches, owner, window] = await Promise.all([
-      read("overlap_bps_value"),
-      read("total_certs"),
-      read("total_watches"),
-      read("owner_address"),
-      read("text_window_size"),
-    ]);
+const PATTERNS = BANNED.map(([code, name, instead, entities]) => ({ name, instead, ...patternFor(code, entities) }));
 
-    const feeWei = num(fee);
-    const feeGen = Number((feeWei * 10000n) / GEN) / 10000;
-    const overlapBps = Number(num(overlap));
+const SKIP_DIRS = new Set(["node_modules", ".next", ".git", "out", "build", "__pycache__", ".vercel"]);
+const SKIP_FILES = new Set(["package-lock.json"]);
+const EXTENSIONS = [".ts", ".tsx", ".js", ".mjs", ".cjs", ".css", ".py", ".md", ".json", ".html", ".svg", ".txt", ".yml", ".yaml"];
+const DOTFILES = new Set([".env.example", ".gitignore", ".gitattributes"]);
 
-    console.log("");
-    console.log("  It answers, and it is Standing.");
-    console.log("");
-    console.log(`  address     ${address}`);
-    console.log(`  network     ${net.chain.name} (chain ${net.chain.id}) [--network=${net.name}]`);
-    console.log(`  owner       ${owner}`);
-    console.log(`  fee         ${feeGen} GEN  (${feeWei} wei)`);
-    console.log(`  threshold   ${overlapBps} bps`);
-    console.log(`  text window ${Number(num(window)).toLocaleString("en-US")} chars`);
-    console.log(`  certs       ${Number(num(certs))}`);
-    console.log(`  watches     ${Number(num(watches))}`);
-    console.log(`  explorer    ${EXPLORER}address/${address}`);
-    console.log("");
-
-    const notes = [];
-    if (feeGen !== 0.4) {
-      notes.push(`fee is ${feeGen} GEN, not the intended 0.4`);
+function* walk(dir) {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      if (!SKIP_DIRS.has(entry) && !entry.startsWith(".")) yield* walk(full);
+      continue;
     }
-    if (overlapBps !== 6000) {
-      notes.push(`threshold is ${overlapBps} bps, not the intended 6000`);
+    if (SKIP_FILES.has(entry)) continue;
+    if (DOTFILES.has(entry) || (!entry.startsWith(".") && EXTENSIONS.some((ext) => entry.endsWith(ext)))) {
+      yield full;
     }
-
-    if (notes.length) {
-      console.log("  Deployed, but not with the numbers the brief specifies:");
-      for (const n of notes) console.log(`    - ${n}`);
-      console.log("");
-      console.log("  Both are constructor arguments, so fixing them means");
-      console.log("  deploying again and using the new address.");
-      console.log("");
-      process.exitCode = 1;
-    } else {
-      console.log("  Constructor arguments are correct.");
-      console.log("");
-      console.log("  Set this in Vercel (all three environments), then redeploy:");
-      console.log("");
-      console.log(`  NEXT_PUBLIC_STANDING_ADDRESS=${address}`);
-      console.log("");
-    }
-  } catch (e) {
-    const message = e?.shortMessage ?? e?.message ?? String(e);
-    console.error("");
-    console.error(`  Could not read a Standing contract at ${address}.`);
-    console.error(`  ${message}`);
-    console.error("");
-    console.error("  Either nothing is deployed there, the address is mistyped,");
-    console.error("  or what is deployed is a different contract.");
-    console.error(`  ${EXPLORER}address/${address}`);
-    console.error("");
-    process.exitCode = 1;
   }
 }
+
+let files = 0;
+const byFile = new Map();
+
+for (const file of walk(ROOT)) {
+  const rel = relative(ROOT, file).split(sep).join("/");
+  files += 1;
+  const source = readFileSync(file, "utf8");
+  for (const { name, exact, loose } of PATTERNS) {
+    for (const re of [exact, loose]) {
+      for (const match of source.matchAll(re)) {
+        const line = source.slice(0, match.index).split("\n").length;
+        if (!byFile.has(rel)) byFile.set(rel, []);
+        byFile.get(rel).push({ name, line });
+      }
+    }
+  }
+}
+
+if (byFile.size === 0) {
+  console.log(`clean  (${BANNED.length} characters, as characters, entities and escapes, across ${files} files)`);
+  process.exit(0);
+}
+
+const total = [...byFile.values()].reduce((n, list) => n + list.length, 0);
+console.error(`${total} banned characters in ${byFile.size} files:\n`);
+for (const [rel, list] of [...byFile].sort((a, b) => b[1].length - a[1].length)) {
+  const counts = new Map();
+  for (const hit of list) counts.set(hit.name, (counts.get(hit.name) ?? 0) + 1);
+  const summary = [...counts].map(([name, n]) => `${n} ${name}${n > 1 ? "s" : ""}`).join(", ");
+  console.error(`  ${rel}  ${summary}  (first at line ${Math.min(...list.map((h) => h.line))})`);
+}
+console.error("\nThe connector is a spaced hyphen. The ellipsis is three periods.");
+process.exit(1);

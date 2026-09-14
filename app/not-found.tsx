@@ -9,7 +9,7 @@ export default function NotFound() {
       </h1>
       <p className="lede" style={{ marginTop: 14 }}>
         A certificate that does not exist is not the same as a certificate that
-        failed. If you were shown a number, check it on the verify page — a
+        failed. If you were shown a number, check it on the verify page - a
         missing record is itself worth knowing about.
       </p>
       <div className="row" style={{ marginTop: 26 }}>

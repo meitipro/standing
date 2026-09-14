@@ -2,70 +2,40 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
 import { connectWallet, notarize, readableError, IS_LIVE } from "@/lib/chain";
+import { checkUrl, withScheme } from "@/lib/url";
 import type { WriteStage } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/**
- * The same refusals the contract makes, made here first.
- *
- * The contract is the authority — this is a copy, and a copy that drifts is
- * worse than none. Its only job is to spend nothing on a url that is going to
- * be refused anyway, and to say why while the field is still focused.
- */
-const PRIVATE_HOSTS = [
-  "localhost",
-  "127.0.0.1",
-  "0.0.0.0",
-  "::1",
-  "169.254.169.254",
-  "metadata.google.internal",
-];
-
-function precheck(raw: string): string {
-  const value = raw.trim();
-  if (!value) return "Paste a url first.";
-
-  let u: URL;
-  try {
-    u = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-  } catch {
-    return "That is not a url.";
-  }
-
-  if (u.protocol !== "http:" && u.protocol !== "https:")
-    return "Only http and https pages can be notarised.";
-  if (u.username || u.password)
-    return "A url carrying credentials is not a public page.";
-
-  const host = u.hostname.toLowerCase();
-  if (
-    PRIVATE_HOSTS.includes(host) ||
-    /^(10\.|127\.|192\.168\.|169\.254\.|0\.)/.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal") ||
-    !host.includes(".")
-  )
-    return "That address is not reachable from the public internet.";
-
-  return "";
-}
-
 const NARRATION: Record<WriteStage, string> = {
   idle: "",
-  signing: "Confirm the fee in your wallet.",
-  sent: "Validators are fetching the page. This takes about forty seconds, because several of them are each rendering it and reading the screenshot.",
-  accepted: "Agreed. Writing the certificate.",
-  finalized: "Recorded.",
+  signing: "Confirm the price in your wallet.",
+  sent: "Each validator is reading the page for itself and checking every claim against its own copy.",
+  accepted: "Agreed. Reading the certificate back.",
   failed: "",
 };
 
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1) + ".";
+}
+
+/**
+ * Paste a url, sign, and land on the certificate.
+ *
+ * The url is refused or normalised here by lib/url.ts, the contract's own
+ * guard held to it by a parity test, so nobody signs for a url the contract
+ * will refuse, and the url sent is the url stored.
+ */
 export default function NotarizeField({
   autoFocus = false,
+  price,
+  network,
 }: {
   autoFocus?: boolean;
+  price: string | null;
+  network: string;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -79,27 +49,29 @@ export default function NotarizeField({
     e.preventDefault();
     setError("");
 
-    const problem = precheck(url);
-    if (problem) {
-      setError(problem);
+    if (!url.trim()) {
+      setError("Paste a url first.");
       setStage("failed");
       return;
     }
-
+    const checked = checkUrl(withScheme(url));
+    if (!checked.ok) {
+      setError(sentence(checked.reason));
+      setStage("failed");
+      return;
+    }
     if (!IS_LIVE) {
-      setError(
-        "The contract is not deployed yet, so nothing can be captured. Every record on this site is sample data."
-      );
+      setError("This site is not pointed at a Standing contract yet.");
       setStage("failed");
       return;
     }
 
     try {
       setStage("signing");
-      const address = (await connectWallet()) as `0x${string}`;
+      const address = await connectWallet();
       const { certId } = await notarize({
         address,
-        url: url.trim(),
+        url: checked.url,
         onStage: (s, n) => {
           setStage(s);
           setNote(n ?? "");
@@ -137,17 +109,13 @@ export default function NotarizeField({
             }}
             disabled={busy}
           />
-          <button disabled={busy}>
-            {busy ? "Capturing" : "Notarize this page"}
-          </button>
+          <button disabled={busy}>{busy ? "Capturing" : "Notarize this page"}</button>
         </div>
       </form>
 
-      <p
-        className="mono tiny muted"
-        style={{ letterSpacing: "0.02em", maxWidth: 560 }}
-      >
-        0.4 GEN per capture · settles in ~40s · GenLayer Testnet Bradbury
+      <p className="mono tiny muted" style={{ letterSpacing: "0.02em", maxWidth: 560 }}>
+        {price ? `${price} GEN per capture - ` : ""}
+        {network}
       </p>
 
       {busy && (
@@ -157,26 +125,10 @@ export default function NotarizeField({
       )}
 
       {error && (
-        <div
-          className="notice notice-flag"
-          role="alert"
-          style={{ maxWidth: 560 }}
-        >
+        <div className="notice notice-flag" role="alert" style={{ maxWidth: 560 }}>
           {error}
-          {/unstable|changed between fetches/i.test(error) && (
-            <>
-              {" "}
-              Nothing was recorded and the fee was not taken. A page that moves
-              while it is being read has no single answer, so trying again in a
-              minute is the honest next step.
-            </>
-          )}
-          {/status 4\d\d|blocked/i.test(error) && (
-            <>
-              {" "}
-              If the page is behind a login or a bot check it cannot be
-              notarised. An archived copy of it, on a public url, can be.
-            </>
+          {/error status|almost no text/i.test(error) && (
+            <> A page behind a login or a bot check cannot be notarised; a public copy of it can.</>
           )}
         </div>
       )}

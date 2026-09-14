@@ -1,33 +1,25 @@
 /**
- * The verdict band on a certificate: did the picture show what the text said?
+ * The image check on a certificate: did the rendered page show what its text
+ * stated?
  *
- * One full sentence explaining what the answer means, for readers who have
- * never heard the term. It is the most valuable line the product can produce —
- * no screenshot tool can tell you this — so it gets a band of its own and
- * prose, rather than a red icon in a corner.
+ * Every validator renders its own screenshot, asks its own model, and the
+ * answers are compared exactly, so this band reports a finding the network
+ * agreed on. It gets a band and a sentence rather than an icon in a corner.
  */
 export default function CloakingNotice({ cloaking }: { cloaking: boolean }) {
   if (!cloaking) {
     return (
       <section className="verdict verdict-ok">
-        <span
-          className="verdict-glyph"
-          style={{ color: "var(--accent)" }}
-          aria-hidden="true"
-        >
+        <span className="verdict-glyph" style={{ color: "var(--accent)" }} aria-hidden="true">
           =
         </span>
         <div>
-          <p
-            className="eyebrow"
-            style={{ color: "var(--accent)", marginBottom: 6 }}
-          >
-            Cloaking
+          <p className="eyebrow" style={{ color: "var(--accent)", marginBottom: 6 }}>
+            Image check
           </p>
           <p>
-            The rendered screenshot matches the text this page served to the
-            validators — a reader and a script were shown the same thing at this
-            moment.
+            Each validator compared its own screenshot of this page with the text it was
+            served, and they agreed the two show the same claims.
           </p>
         </div>
       </section>
@@ -35,11 +27,7 @@ export default function CloakingNotice({ cloaking }: { cloaking: boolean }) {
   }
   return (
     <section className="verdict verdict-flag">
-      <span
-        className="verdict-glyph"
-        style={{ color: "var(--flag)" }}
-        aria-hidden="true"
-      >
+      <span className="verdict-glyph" style={{ color: "var(--flag)" }} aria-hidden="true">
         !
       </span>
       <div>
@@ -47,11 +35,10 @@ export default function CloakingNotice({ cloaking }: { cloaking: boolean }) {
           Cloaking
         </p>
         <p>
-          The rendered screenshot does not match the text this page served to
-          the validators — a reader and a script were shown different things at
-          this moment. That usually means the page treats a crawler differently,
-          but it can also mean the page changed while it was being read. It is a
-          fact about the capture, not an accusation.
+          Each validator compared its own screenshot of this page with the text it was
+          served, and they agreed the two show different claims. A page that serves a
+          script something other than what it shows a reader looks like this, and so does
+          a page that changed while it was being read.
         </p>
       </div>
     </section>

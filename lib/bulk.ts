@@ -1,107 +1,59 @@
-import { normaliseUrl } from "./format";
+import { getAddress } from "viem";
+
+import { checkUrl, withScheme } from "./url";
 
 /**
  * Deciding what each pasted line is.
  *
- * This lives here rather than inside the bulk screen because it is the rule
- * that decides what somebody is about to pay for: a line read as a page costs a
- * full capture, a line read as a contract costs a quarter of one, and a line
- * read wrongly costs a transaction that fails after signing. Logic with that
- * job should be testable without a browser.
+ * This is the rule that decides what somebody is about to pay for: a page
+ * costs a capture, a contract a quarter of one, and a line read wrongly costs
+ * a transaction that is refused after signing. Pages go through the same
+ * guard the contract runs, so a line marked ready here is one the contract
+ * accepts.
  */
 
-/** A contract address: 0x and exactly forty hex characters. */
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-
-/** Hosts that resolve inside a validator's own network. Mirrors the contract. */
-const PRIVATE_HOSTS = [
-  "localhost",
-  "127.0.0.1",
-  "0.0.0.0",
-  "::1",
-  "169.254.169.254",
-  "metadata.google.internal",
-];
 
 export type Kind = "page" | "contract" | "bad";
 
 export type Row = {
   raw: string;
   kind: Kind;
-  /** Normalised url, or a lowercased address — whatever the chain will key on. */
+  /** The url the contract will store, or the checksummed address. */
   key: string;
   problem: string;
-  /** Contracts only, filled in later from the contract's own schema. */
+  /** Contracts only, filled in from the contract's own schema. */
   methods: string[];
   duplicate: boolean;
 };
 
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1) + ".";
+}
+
 export function classify(raw: string): Row {
   const line = raw.trim();
-  const base: Row = {
-    raw: line,
-    kind: "bad",
-    key: line,
-    problem: "",
-    methods: [],
-    duplicate: false,
-  };
+  const base: Row = { raw: line, kind: "bad", key: line, problem: "", methods: [], duplicate: false };
 
   if (ADDRESS.test(line)) {
-    return { ...base, kind: "contract", key: line.toLowerCase() };
+    return { ...base, kind: "contract", key: getAddress(line.toLowerCase()) };
   }
 
-  /* Anything 0x shaped but not forty hex is a mistyped address, not a url.
-   * Telling someone "that is not a url" about an address they clearly pasted
-   * as an address sends them looking in the wrong place. */
+  /* 0x shaped but not forty hex is a mistyped address, not a url. Saying
+   * "that is not a url" about it sends someone looking in the wrong place. */
   if (/^0x/i.test(line)) {
-    return {
-      ...base,
-      problem: "A contract address is 0x and 40 hex characters. This is not.",
-    };
+    return { ...base, problem: "A contract address is 0x and 40 hex characters. This is not." };
   }
 
-  let u: URL;
-  try {
-    u = new URL(/^https?:\/\//i.test(line) ? line : `https://${line}`);
-  } catch {
-    return { ...base, problem: "Not a url and not a contract address." };
-  }
-
-  if (u.protocol !== "http:" && u.protocol !== "https:") {
-    return { ...base, problem: "Only http and https pages can be notarised." };
-  }
-  if (u.username || u.password) {
-    return {
-      ...base,
-      problem: "A url carrying credentials is not a public page.",
-    };
-  }
-
-  const host = u.hostname.toLowerCase();
-  if (
-    PRIVATE_HOSTS.includes(host) ||
-    /^(10\.|127\.|192\.168\.|169\.254\.|0\.)/.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal") ||
-    !host.includes(".")
-  ) {
-    return { ...base, problem: "Not reachable from the public internet." };
-  }
-
-  return { ...base, kind: "page", key: normaliseUrl(line) };
+  const checked = checkUrl(withScheme(line));
+  if (!checked.ok) return { ...base, problem: sentence(checked.reason) };
+  return { ...base, kind: "page", key: checked.url };
 }
 
 /**
- * Classify a whole paste, marking repeats.
- *
- * Duplicates are flagged rather than dropped so the screen can still show the
- * line and say why it will be skipped. Silently removing a line from a list
- * somebody is about to pay for is the wrong kind of helpful.
- *
- * Matching is on the normalised key, so the same page written three different
- * ways is caught — which is the whole reason this is not a Set of raw strings.
+ * Classify a whole paste, marking repeats rather than dropping them, so the
+ * screen can still show the line and say why it will be skipped. Matching is
+ * on the key, so one page written three ways is caught.
  */
 export function classifyAll(text: string): Row[] {
   const seen = new Set<string>();

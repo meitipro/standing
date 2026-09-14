@@ -1,45 +1,23 @@
-/** The shape the contract's `certificate(id)` view returns, in camel case. */
+import type { Verdict } from "./limits";
+
+/** A certificate as the contract's `certificate(id)` view returns it, in camel case. */
 export type Certificate = {
   id: number;
+  /** The normalised page url, or genlayer:// and an address for a contract snapshot. */
   url: string;
-  title: string;
+  kind: "page" | "contract";
+  /** Sorted for a page. In the order the views were read for a contract. */
   claims: string[];
-
-  /** sha256 of the exact text window every validator re-hashed before agreeing. */
-  textDigest: string;
-
-  /**
-   * sha256 of the leader's screenshot bytes. Leader attested, not consensus
-   * checked — two browsers never produce identical pixels for one page. Every
-   * surface that prints it has to say so.
-   */
-  shotDigest: string;
-
+  /** sha256 of the claims joined by newlines. Anyone can recompute it. */
+  claimsDigest: string;
+  /** The validators agreed the screenshot does not show what the text states. */
   cloaking: boolean;
-
-  /**
-   * The overlap threshold in force when this was issued, in basis points. NOT
-   * the overlap achieved, and not a count of validators: a contract cannot see
-   * either of those.
-   */
-  thresholdBps: number;
-
-  textChars: number;
-  statusCode: number;
-
   /** "2026-07-21T14:02:07", always UTC, always 19 characters. */
   at: string;
-
   requester: string;
-  watchId: number;
-  watched: boolean;
-
-  /**
-   * Transaction finality, which lives in the consensus layer rather than in
-   * contract storage. A record is readable on acceptance and marked
-   * provisional until this turns true.
-   */
-  finalized: boolean;
+  watchId: number | null;
+  /** The previous certificate of the same url, or null for the first. */
+  previous: number | null;
 };
 
 export type WatchRecord = {
@@ -47,14 +25,24 @@ export type WatchRecord = {
   url: string;
   owner: string;
   cadenceHours: number;
-  lastChecked: string;
+  /** The capture price locked when the watch opened, in wei. */
+  unit: bigint;
+  /** Wei held for the watch's unspent captures. */
+  held: bigint;
+  capturesLeft: number;
   createdAt: string;
-  credits: number;
-  certIds: number[];
+  /** Empty until the first capture. */
+  lastChecked: string;
+  /** Empty when the next capture is due immediately. */
+  nextDue: string;
   active: boolean;
+  certCount: number;
+  lastCert: number | null;
+  /** The watch's certificates, oldest first. Empty in a list read. */
+  certs: number[];
 };
 
-/** One capture in a watch timeline, against the capture before it. */
+/** One capture of a page, against the capture before it. */
 export type TimelineEntry = {
   cert: Certificate;
   added: string[];
@@ -63,32 +51,34 @@ export type TimelineEntry = {
   hasPrevious: boolean;
 };
 
-/**
- * The three answers the network can reach about a change between two captures.
- *
- * A claim diff can say two claims left and two arrived. It cannot say whether a
- * fee moved from one percent to five or whether the same fee was reworded, and
- * those are the same diff with opposite meanings.
- */
-export type VerdictKind = "unchanged" | "reworded" | "material";
+export type AssessmentLine = {
+  id: string;
+  record: "earlier" | "later";
+  claim: string;
+};
 
 export type Assessment = {
   id: number;
   certA: number;
   certB: number;
   url: string;
-  verdict: VerdictKind;
-  summary: string;
-  /** Only ever populated for a material verdict, each naming old and new. */
-  changes: string[];
+  verdict: Verdict;
+  /** For a material verdict, the claims that carry the difference. */
+  lines: AssessmentLine[];
   at: string;
   requester: string;
 };
 
-export type WriteStage =
-  | "idle"
-  | "signing"
-  | "sent"
-  | "accepted"
-  | "finalized"
-  | "failed";
+export type Stats = {
+  owner: string;
+  fee: bigint;
+  assessFee: bigint;
+  snapshotFee: bigint;
+  feesAccrued: bigint;
+  prepaidHeld: bigint;
+  certificates: number;
+  watches: number;
+  assessments: number;
+};
+
+export type WriteStage = "idle" | "signing" | "sent" | "accepted" | "failed";

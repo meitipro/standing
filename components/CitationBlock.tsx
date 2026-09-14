@@ -4,19 +4,16 @@ import type { Certificate } from "@/lib/types";
 import CopyButton from "./CopyButton";
 
 /**
- * One line to paste into an article, a filing or a thread.
- *
- * It has to survive being pasted somewhere with no styling, so it is a single
- * sentence carrying the four things a reader needs: what page, at what moment,
- * where the record is, and what it does not claim.
+ * One line to paste into an article, a filing or a thread. It survives being
+ * pasted somewhere with no styling: which page, which moment, where the
+ * record is, and what the record is.
  */
 export function citationFor(cert: Certificate): string {
-  return `${displayUrl(cert.url)} as it stood at ${formatStamp(
-    cert.at
-  )} — Standing certificate ${cert.id}, ${ORIGIN.replace(
-    /^https?:\/\//,
-    ""
-  )}/c/${cert.id}. Attests what the page said, not that it was true.`;
+  const where = `${ORIGIN.replace(/^https?:\/\//, "")}/c/${cert.id}`;
+  if (cert.kind === "contract") {
+    return `${displayUrl(cert.url)} as its views read at ${formatStamp(cert.at)}. Standing certificate ${cert.id}, ${where}.`;
+  }
+  return `${displayUrl(cert.url)} as it stood at ${formatStamp(cert.at)}. Standing certificate ${cert.id}, ${where}: what the page stated, each claim confirmed by independent validators.`;
 }
 
 export default function CitationBlock({ cert }: { cert: Certificate }) {

@@ -3,48 +3,43 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { assess, readableError, IS_LIVE } from "@/lib/chain";
-import { connectWallet } from "@/lib/chain";
-import type { Assessment, VerdictKind, WriteStage } from "@/lib/types";
+import { assess, connectWallet, readableError, IS_LIVE } from "@/lib/chain";
+import type { Verdict } from "@/lib/limits";
+import type { Assessment, WriteStage } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * The network's answer to "did the substance change?", and the button to ask.
+ * The network's answer to "did the change matter?", and the button to ask.
  *
- * A claim diff is a set operation: it can say two claims left and two arrived,
- * and it says exactly that whether a fee moved from one percent to five or a
- * copywriter reworded the same sentence. Those are the same diff and opposite
- * findings. Telling them apart is a judgment, which is why it lives on chain
- * behind consensus rather than in this component behind a heuristic.
+ * A claim diff is a set operation. It reads the same whether a fee moved from
+ * one percent to five or a copywriter reworded a sentence, and telling those
+ * apart is a judgment. So it is asked of the network: each validator asks its
+ * own model in both presentation orders, and they must reach the same answer.
  */
-const LOOK: Record<
-  VerdictKind,
-  { label: string; tag: string; line: string }
-> = {
+const LOOK: Record<Verdict, { label: string; tag: string; line: string }> = {
   material: {
     label: "Material change",
     tag: "tag tag-flag",
-    line: "At least one fact a reader would act on is different.",
+    line: "The two captures state different values for the same fact, and a reader would act differently because of it.",
   },
-  reworded: {
-    label: "Reworded only",
+  immaterial: {
+    label: "No material change",
     tag: "tag tag-ok",
-    line: "The same facts, stated differently. Nothing to act on changed.",
+    line: "No claim in one capture contradicts a claim in the other in a way a reader would act on.",
   },
-  unchanged: {
-    label: "Unchanged",
+  unclear: {
+    label: "Unclear",
     tag: "tag",
-    line: "Nothing of consequence differs between these two captures.",
+    line: "Shown the two captures in opposite orders, the model answered differently, so the contract stored neither answer.",
   },
 };
 
 const NARRATION: Record<WriteStage, string> = {
   idle: "",
-  signing: "Confirm the fee in your wallet.",
-  sent: "Validators are each reading both captures and deciding independently.",
-  accepted: "Agreed. Writing the verdict.",
-  finalized: "Recorded.",
+  signing: "Confirm the price in your wallet.",
+  sent: "Each validator is asking its own model, in both orders, and comparing the answer.",
+  accepted: "Agreed. Reading the judgment back.",
   failed: "",
 };
 
@@ -52,10 +47,12 @@ export default function ChangeVerdict({
   certA,
   certB,
   existing,
+  price,
 }: {
   certA: number;
   certB: number;
   existing: Assessment | null;
+  price: string | null;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<WriteStage>("idle");
@@ -67,13 +64,13 @@ export default function ChangeVerdict({
   async function ask() {
     setError("");
     if (!IS_LIVE) {
-      setError("The contract is not deployed yet, so nothing can be assessed.");
+      setError("This site is not pointed at a Standing contract yet.");
       setStage("failed");
       return;
     }
     try {
       setStage("signing");
-      const address = (await connectWallet()) as `0x${string}`;
+      const address = await connectWallet();
       await assess({
         address,
         certA,
@@ -83,8 +80,6 @@ export default function ChangeVerdict({
           setNote(n ?? "");
         },
       });
-      // The verdict is read server side, so the page has to be refetched rather
-      // than patched in place.
       router.refresh();
       setStage("idle");
     } catch (e: any) {
@@ -95,40 +90,32 @@ export default function ChangeVerdict({
 
   if (existing) {
     const look = LOOK[existing.verdict];
+    const shared = existing.certA !== certA || existing.certB !== certB;
     return (
       <div className="stack-12" style={{ marginTop: 16 }}>
         <div className="row" style={{ gap: 10 }}>
           <span className={look.tag}>{look.label}</span>
           <span className="mono tiny muted">
-            agreed by the network · assessment {existing.id}
+            assessment {existing.id}
+            {shared ? `, first asked of certificates ${existing.certA} and ${existing.certB}` : ""}
           </span>
         </div>
 
-        {existing.summary && (
-          <p className="pretty" style={{ maxWidth: "62ch" }}>
-            {existing.summary}
-          </p>
-        )}
-
-        {existing.changes.length > 0 && (
-          <ul
-            className="ledger"
-            style={{ listStyle: "none", margin: 0, padding: 0 }}
-          >
-            {existing.changes.map((c) => (
-              <li key={c} className="ledger-yes">
+        {existing.lines.length > 0 && (
+          <ul className="claims diff">
+            {existing.lines.map((l) => (
+              <li key={l.id} data-diff={l.record === "later" ? "added" : "removed"}>
                 <span className="sign" aria-hidden="true">
-                  →
+                  {l.record === "later" ? "+" : "-"}
                 </span>
-                <span>{c}</span>
+                <span className="text">{l.claim}</span>
               </li>
             ))}
           </ul>
         )}
 
         <p className="small muted pretty" style={{ maxWidth: "62ch" }}>
-          {look.line} Several validators each read both captures and reached
-          this verdict independently — it is not one model&apos;s opinion.
+          {look.line} Each validator reached this same answer on its own.
         </p>
       </div>
     );
@@ -137,15 +124,10 @@ export default function ChangeVerdict({
   return (
     <div className="stack-12" style={{ marginTop: 16 }}>
       <div className="row" style={{ gap: 10 }}>
-        <button
-          type="button"
-          className="btn btn-accent"
-          onClick={ask}
-          disabled={busy}
-        >
-          {busy ? "Assessing" : "Did this change matter? · 0.2 GEN"}
+        <button type="button" className="btn btn-accent" onClick={ask} disabled={busy}>
+          {busy ? "Asking" : `Did this change matter?${price ? ` - ${price} GEN` : ""}`}
         </button>
-        <span className="mono tiny muted">asks the network, not a server</span>
+        <span className="mono tiny muted">asked of the network, once per change</span>
       </div>
 
       {busy && (

@@ -1,59 +1,40 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { getCertificate } from "@/lib/store";
+import { getStats, listCertificates } from "@/lib/store";
 import { certificateJson } from "@/lib/api";
 import { ORIGIN } from "@/lib/chain";
-import { SAMPLE_MODE } from "@/lib/seed";
+import { formatGen } from "@/lib/format";
 
 export const revalidate = 5;
 
 export const metadata: Metadata = {
   title: "API",
-  description:
-    "Two endpoints: one to capture a page, one to read a certificate. Volume pricing for other dApps, research desks and compliance teams.",
+  description: "Read certificates, watches and judgments as JSON, or call the contract directly with your own wallet.",
 };
 
 const ENDPOINTS = [
-  {
-    method: "GET",
-    path: "/api/v1/certificates/:id",
-    job: "One certificate, as the chain holds it.",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/certificates?url=",
-    job: "Every capture of one url, newest first.",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/certificates?digest=",
-    job: "Find the certificate carrying a sha256 digest, or a 404.",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/watches/:id",
-    job: "A watch with its full timeline and per capture diffs.",
-  },
-  {
-    method: "GET",
-    path: "/api/v1/assessments?from=&to=",
-    job: "The network's verdict on a change: unchanged, reworded or material.",
-  },
-  {
-    method: "POST",
-    path: "/api/v1/notarize",
-    job: "Capture a page. Needs a relayer key, so it answers 501 today.",
-  },
+  ["GET", "/api/v1/certificates", "The newest certificates, newest first."],
+  ["GET", "/api/v1/certificates/:id", "One certificate, as the chain holds it."],
+  ["GET", "/api/v1/certificates?url=", "The newest captures of one url, newest first."],
+  ["GET", "/api/v1/certificates?digest=", "The first certificate carrying a claims digest, or a 404."],
+  ["GET", "/api/v1/watches/:id", "A watch, with its page's history and the change between captures."],
+  ["GET", "/api/v1/assessments?from=&to=", "The judgment of the change between two captures, or a 404."],
+  ["GET", "/api/contract-source", "The contract's source, byte for byte, as text."],
 ];
 
 export default async function ApiPage() {
-  // Rendered from the same function the endpoint uses, so the documented shape
-  // cannot drift from the served one.
-  const sample = await getCertificate(10);
-  const body = sample
-    ? JSON.stringify({ sample: SAMPLE_MODE, certificate: certificateJson(sample) }, null, 2)
-    : "{}";
+  const [newest, stats] = await Promise.all([listCertificates(1), getStats()]);
+  const sample = newest[0];
+  const price = (wei: bigint | undefined) => (wei === undefined ? "read stats()" : `${formatGen(wei)} GEN`);
+
+  const WRITES = [
+    ["notarize(url)", price(stats?.fee), "Certify what a page states now."],
+    ["notarize_contracts(targets, method_sets)", `${price(stats?.snapshotFee)} each`, "Record other contracts' zero-argument views, up to ten per call."],
+    ["watch(url, cadence_hours)", `${price(stats?.fee)} per capture`, "Prepay captures of a page on a cadence."],
+    ["capture_watch(watch_id)", "free", "Take a watch's due capture. Any account may."],
+    ["assess(cert_a, cert_b)", price(stats?.assessFee), "Put one question about two captures of a page."],
+  ];
 
   return (
     <div className="wrap section" style={{ maxWidth: 900 }}>
@@ -62,159 +43,98 @@ export default async function ApiPage() {
         Certificates as an input to your product.
       </h1>
       <p className="lede" style={{ marginTop: 14 }}>
-        Two things worth calling: one endpoint that captures a page, one that
-        reads a certificate. Dispute systems, research desks and compliance
-        teams mostly want the second.
+        Everything this site shows, as JSON, read from the contract. Writes go to the contract
+        itself, signed by your own wallet.
       </p>
 
       <section style={{ marginTop: 36 }}>
-        <h2 className="h3">Endpoints</h2>
+        <h2 className="h3">Read</h2>
         <div className="scroll-x table-framed" style={{ marginTop: 18 }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th style={{ width: 70 }}>method</th>
-              <th style={{ width: 320 }}>path</th>
-              <th>the one job</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ENDPOINTS.map((e) => (
-              <tr key={e.path}>
-                <td className="mono">{e.method}</td>
-                <td className="mono break">{e.path}</td>
-                <td>{e.job}</td>
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: 70 }}>method</th>
+                <th style={{ width: 320 }}>path</th>
+                <th>returns</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ENDPOINTS.map(([method, path, job]) => (
+                <tr key={path}>
+                  <td className="mono">{method}</td>
+                  <td className="mono break">{path}</td>
+                  <td>{job}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
-
-      <section style={{ marginTop: 40 }}>
-        <h2 className="h3">Read a certificate</h2>
-        <pre className="code" style={{ marginTop: 16 }}>
-          curl {ORIGIN}/api/v1/certificates/{sample ? sample.id : 8812}
-        </pre>
-        <p className="small muted" style={{ margin: "16px 0 10px" }}>
-          The response below is generated by the same function that serves the
-          endpoint, so it is the real shape rather than a written approximation.
+        <p className="tiny muted" style={{ marginTop: 12 }}>
+          Responses are cached for five seconds. Every field name mirrors the contract&apos;s own
+          views, so the same record can be read off the chain with no part of this site.
         </p>
-        <pre className="code">{body}</pre>
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2 className="h3">Capture a page</h2>
+        <h2 className="h3">A certificate</h2>
         <pre className="code" style={{ marginTop: 16 }}>
-          <span className="c"># signs with a server side relayer, billed to your key</span>
-          {"\n"}curl -X POST {ORIGIN}/api/v1/notarize \{"\n"}
-          {"  "}-H &apos;authorization: Bearer YOUR_KEY&apos; \{"\n"}
-          {"  "}-H &apos;content-type: application/json&apos; \{"\n"}
-          {"  "}-d &apos;{"{"}&quot;url&quot;: &quot;https://example.xyz/tokenomics&quot;{"}"}&apos;
+          curl {ORIGIN}/api/v1/certificates/{sample ? sample.id : 0}
         </pre>
-        <div className="notice" style={{ marginTop: 18 }}>
-          <strong>This returns 501 right now.</strong> A capture is a signed,
-          payable transaction, so serving it for you needs a funded relayer
-          account whose key sits on our server and whose spend is billed against
-          yours. Until that exists the endpoint says so rather than accepting
-          work it cannot do. Calling{" "}
-          <code className="mono">notarize(url)</code> on the contract with your
-          own wallet works today and needs nothing from us — which is rather the
-          point of putting it on a chain.
-        </div>
+        {sample ? (
+          <>
+            <p className="small muted" style={{ margin: "16px 0 10px" }}>
+              The newest certificate, rendered by the function that serves the endpoint.
+            </p>
+            <pre className="code">{JSON.stringify({ certificate: certificateJson(sample) }, null, 2)}</pre>
+          </>
+        ) : (
+          <p className="small muted" style={{ marginTop: 16 }}>
+            The response appears here once the first certificate is on chain.
+          </p>
+        )}
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2 className="h3">A capture takes about forty seconds</h2>
+        <h2 className="h3">Write</h2>
         <p className="small muted" style={{ marginTop: 10, maxWidth: "68ch" }}>
-          Several validators are each fetching the page, rendering it, and
-          running a vision model over the screenshot. Treat a capture as a job,
-          not a request: it returns a transaction hash, the record is readable
-          when the network accepts it, and it is marked provisional until the
-          appeal window closes. Anything you build on top should read on
-          acceptance and display finality separately.
+          Call the contract with any GenLayer client. Each payable call takes exactly the price its{" "}
+          <code className="mono">stats()</code> view reports at that moment, and refuses anything
+          else with a sentence saying so.
         </p>
-      </section>
-
-      <section style={{ marginTop: 40 }} className="cols">
-        <div>
-          <h2 className="h3">Pricing</h2>
-          <dl className="kv" style={{ marginTop: 16 }}>
-            <dt>reads</dt>
-            <dd>free, cached five seconds</dd>
-            <dt>capture</dt>
-            <dd>0.4 GEN, paid inside the transaction</dd>
-            <dt>watch</dt>
-            <dd>0.4 GEN per capture, prepaid</dd>
-            <dt>evidence bundle</dt>
-            <dd>paid export, per bundle</dd>
-            <dt>volume</dt>
-            <dd>
-              <a href="mailto:api@standing.wtf" style={{ textDecoration: "underline" }}>
-                api@standing.wtf
-              </a>
-            </dd>
-          </dl>
-          <p className="tiny muted" style={{ marginTop: 14 }}>
-            The capture fee is read from the contract at call time and can move
-            by governance. Never hardcode it.
-          </p>
-        </div>
-
-        <div>
-          <h2 className="h3">Rate limits</h2>
-          <dl className="kv" style={{ marginTop: 16 }}>
-            <dt>reads</dt>
-            <dd>120 per minute per key</dd>
-            <dt>captures</dt>
-            <dd>rate limited by the fee itself</dd>
-            <dt>burst</dt>
-            <dd>20</dd>
-            <dt>on limit</dt>
-            <dd>429 with retry-after</dd>
-          </dl>
-          <p className="tiny muted" style={{ marginTop: 14 }}>
-            Captures need no separate limit because each one costs a fee, which
-            is the cheapest abuse control there is and the reason the method is
-            payable.
-          </p>
+        <div className="scroll-x table-framed" style={{ marginTop: 18 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>method</th>
+                <th style={{ width: 150 }}>price</th>
+                <th>does</th>
+              </tr>
+            </thead>
+            <tbody>
+              {WRITES.map(([method, cost, does]) => (
+                <tr key={method}>
+                  <td className="mono break">{method}</td>
+                  <td className="mono">{cost}</td>
+                  <td>{does}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2 className="h3">Verdicts, not just diffs</h2>
+        <h2 className="h3">Judgments, not just diffs</h2>
         <p className="small muted pretty" style={{ marginTop: 10, maxWidth: "68ch" }}>
-          A diff between two captures is a set operation, and it reports the
-          same thing whether a fee moved from one percent to five or a
-          copywriter reworded the sentence. If you are building on this, that
-          distinction is usually the whole question, so the network can settle
-          it: several validators each read both claim sets, decide
-          independently, and the verdict only lands if they agree on one of{" "}
-          <code className="mono">unchanged</code>,{" "}
-          <code className="mono">reworded</code> or{" "}
-          <code className="mono">material</code>.
-        </p>
-        <div className="notice" style={{ marginTop: 16, maxWidth: "68ch" }}>
-          <strong>A 404 here is not a verdict.</strong> It means nobody has
-          asked the network about that pair yet, which is a different fact from
-          the network having judged it unchanged. Treating the first as the
-          second would report a silent edit as a quiet page.
-        </div>
-      </section>
-
-      <section style={{ marginTop: 40 }}>
-        <h2 className="h3">What you are buying</h2>
-        <p className="small muted" style={{ marginTop: 10, maxWidth: "68ch" }}>
-          A certificate says several independent validators saw these claims on
-          this url at this time. It does not say the claims are true. If you are
-          building a dispute system, this supplies exhibits — it does not judge
-          them, and a product that treats a certificate as a verdict is misusing
-          it. The{" "}
+          A diff between two captures reports the same thing whether a fee moved from one percent
+          to five or a sentence was reworded. The judgment separates them, answered{" "}
+          <code className="mono">material</code>, <code className="mono">immaterial</code> or{" "}
+          <code className="mono">unclear</code>, and the{" "}
           <Link href="/verify" style={{ textDecoration: "underline" }}>
             verify page
           </Link>{" "}
-          states the limits in full, and the same sentence rides in every JSON
-          response under <code className="mono">proves</code>.
+          sets out how each is reached. A 404 from the assessments endpoint means nobody has put
+          that question yet, which is a different fact from any verdict.
         </p>
       </section>
     </div>

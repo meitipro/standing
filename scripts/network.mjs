@@ -21,7 +21,7 @@ export const NETWORK_NAMES = Object.keys(NETWORKS);
 /**
  * Reads --network=NAME from argv, defaulting to bradbury.
  * Returns { name, chain, explorer, rpc } or throws a plain Error naming the
- * valid options — the callers all turn that into their own tidy message.
+ * valid options - the callers all turn that into their own tidy message.
  */
 export function pickNetwork(argv = process.argv) {
   const hit = argv.find((a) => a.startsWith("--network="));
@@ -31,7 +31,7 @@ export function pickNetwork(argv = process.argv) {
   if (!chain) {
     /* Exits rather than throwing. This runs at module load in all three
      * scripts, before any rpc connection exists, so there are no open handles
-     * for process.exit to trip over — and a thrown error here surfaced as a
+     * for process.exit to trip over - and a thrown error here surfaced as a
      * node stack trace burying the one line that says what to type instead. */
     console.error(`\n  Unknown --network=${name}`);
     console.error(`  Valid values: ${NETWORK_NAMES.join(", ")}\n`);

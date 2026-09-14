@@ -3,16 +3,9 @@
  * timelines.
  *
  * Claims arrive normalised and sorted from the contract, which is what makes
- * the diff a set operation rather than a text comparison. Nothing here
- * re-orders them.
+ * the diff a set operation rather than a text comparison.
  */
-export default function ClaimList({
-  claims,
-  dense = false,
-}: {
-  claims: string[];
-  dense?: boolean;
-}) {
+export default function ClaimList({ claims, dense = false }: { claims: string[]; dense?: boolean }) {
   if (claims.length === 0) {
     return <p className="muted small">No claims were recorded.</p>;
   }
@@ -50,7 +43,7 @@ export function ClaimDiff({
       {removed.map((c) => (
         <li key={`-${c}`} data-diff="removed">
           <span className="sign" aria-hidden="true">
-            &minus;
+            -
           </span>
           <span className="text">{c}</span>
         </li>

@@ -9,7 +9,7 @@
  *
  * Two colours, not one: the stamp is the accent and the clock is ink. That
  * split is what stops it reading as a generic rounded-square app icon at a
- * glance, and it is why the hands are square capped — a round cap at 26px
+ * glance, and it is why the hands are square capped: a round cap at 26px
  * turns the hour hand into a dot.
  */
 export default function Mark({
