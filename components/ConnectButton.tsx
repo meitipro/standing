@@ -43,14 +43,22 @@ export default function ConnectButton() {
     );
   }
 
+  /* The reason a connection failed is shown, not left in a tooltip: on a phone
+   * there is no hover, and "no wallet in this browser" is the commonest answer
+   * there. It stays until dismissed or retried, so it is never timed away. */
   return (
-    <button
-      className="btn"
-      onClick={connect}
-      disabled={busy}
-      title={error || undefined}
-    >
-      {busy ? "Connecting" : "Connect"}
-    </button>
+    <span className="connect">
+      <button className="btn" onClick={connect} disabled={busy} aria-describedby={error ? "connect-error" : undefined}>
+        {busy ? "Connecting" : "Connect"}
+      </button>
+      {error && (
+        <span id="connect-error" role="alert" className="connect-error">
+          {error}{" "}
+          <button type="button" className="linklike" onClick={() => setError("")}>
+            Dismiss
+          </button>
+        </span>
+      )}
+    </span>
   );
 }

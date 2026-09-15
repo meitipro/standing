@@ -5,6 +5,7 @@ import { Archivo, IBM_Plex_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import Mark from "@/components/Mark";
 import ConnectButton from "@/components/ConnectButton";
+import NavLinks from "@/components/NavLinks";
 import ThemeToggle from "@/components/ThemeToggle";
 import { CHAIN, EXPLORER, IS_LIVE, ORIGIN, STANDING } from "@/lib/chain";
 import { shortAddress } from "@/lib/format";
@@ -43,6 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <div className="site">
+          <a href="#content" className="skip">
+            Skip to content
+          </a>
           <header style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg)", borderBottom: "1px solid var(--line)" }}>
             <div className="shell pad masthead">
               <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)" }}>
@@ -50,13 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}>standing</span>
               </Link>
 
-              <nav className="masthead-nav">
-                {NAV.map((item) => (
-                  <Link key={item.href} href={item.href} style={{ color: "inherit" }}>
-                    {item.label}
-                  </Link>
-                ))}
-              </nav>
+              <NavLinks items={NAV} />
 
               <div className="spacer" />
 
@@ -67,7 +65,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </header>
 
-          <main className="shell">{children}</main>
+          <main id="content" className="shell" tabIndex={-1}>
+            {children}
+          </main>
 
           <footer className="slab" style={{ borderTop: "1px solid var(--line)" }}>
             <div className="pad" style={{ maxWidth: "var(--shell)", margin: "0 auto", paddingTop: 64, paddingBottom: 40 }}>

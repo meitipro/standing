@@ -87,8 +87,8 @@ export default function NotarizeField({
   return (
     <div className="stack-12">
       <form onSubmit={submit}>
-        <label className="lbl" htmlFor="url" style={{ position: "absolute", left: -9999 }}>
-          Paste any public url
+        <label className="lbl" htmlFor="url">
+          Page to notarize
         </label>
         <div className="field" style={{ maxWidth: 560 }}>
           <span className="prefix">https://</span>

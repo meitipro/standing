@@ -47,7 +47,7 @@ export default async function Home() {
             own copy, and the claims they all found are recorded with the moment they were read.
           </p>
 
-          <NotarizeField autoFocus price={price} network={CHAIN.name} />
+          <NotarizeField price={price} network={CHAIN.name} />
 
           <div className="stats" style={{ marginTop: 56, maxWidth: 560 }}>
             <div className="stat" style={{ paddingLeft: 0 }}>
@@ -72,7 +72,7 @@ export default async function Home() {
         {featured ? (
           <div>
             <div className="eyebrow" style={{ marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-              <span>The newest certificate</span>
+              <h2 className="eyebrow">The newest certificate</h2>
               <Link href={`/c/${featured.id}`} style={{ letterSpacing: "0.06em" }}>
                 Open it →
               </Link>
@@ -83,9 +83,9 @@ export default async function Home() {
           </div>
         ) : (
           <div>
-            <p className="eyebrow" style={{ marginBottom: 14 }}>
+            <h2 className="eyebrow" style={{ marginBottom: 14 }}>
               Nothing captured yet
-            </p>
+            </h2>
             <div
               style={{
                 border: "1px dashed var(--line)",
@@ -110,18 +110,18 @@ export default async function Home() {
       </section>
 
       <section className="band pad" style={{ paddingTop: 64, paddingBottom: 64 }}>
-        <p className="eyebrow" style={{ marginBottom: 36 }}>
+        <h2 className="eyebrow" style={{ marginBottom: 36 }}>
           How it works
-        </p>
+        </h2>
 
         <div className="panel split" style={{ overflow: "hidden", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))" }}>
           <div style={{ padding: "26px 24px 24px" }}>
-            <p style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+            <h3 style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
               <span className="eyebrow eyebrow-accent">01</span>
               <span className="eyebrow" style={{ color: "var(--ink)" }}>
                 Read
               </span>
-            </p>
+            </h3>
             <div className="plate" aria-hidden="true">
               <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                 {NODES.map((n) => (
@@ -144,12 +144,12 @@ export default async function Home() {
           </div>
 
           <div style={{ padding: "26px 24px 24px" }}>
-            <p style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+            <h3 style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
               <span className="eyebrow eyebrow-accent">02</span>
               <span className="eyebrow" style={{ color: "var(--ink)" }}>
                 Check
               </span>
-            </p>
+            </h3>
             <div className="plate" aria-hidden="true" style={{ justifyContent: "center", gap: 6 }}>
               {CHECKS.map((c) => (
                 <span key={c} className="mono" style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)" }}>
@@ -165,12 +165,12 @@ export default async function Home() {
           </div>
 
           <div style={{ padding: "26px 24px 24px" }}>
-            <p style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+            <h3 style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
               <span className="eyebrow eyebrow-accent">03</span>
               <span className="eyebrow" style={{ color: "var(--ink)" }}>
                 Record
               </span>
-            </p>
+            </h3>
             <div className="plate" aria-hidden="true" style={{ justifyContent: "center", gap: 8 }}>
               <span className="mono break" style={{ fontSize: 11, color: "var(--muted)" }}>
                 {featured ? `sha256:${shortDigest(featured.claimsDigest, 6, 4)}` : "sha256:..."}
@@ -189,9 +189,9 @@ export default async function Home() {
       </section>
 
       <section className="band pad" style={{ paddingTop: 48, paddingBottom: 48 }}>
-        <p className="eyebrow eyebrow-accent" style={{ marginBottom: 20 }}>
+        <h2 className="eyebrow eyebrow-accent" style={{ marginBottom: 20 }}>
           What a certificate holds
-        </p>
+        </h2>
         <dl className="kv" style={{ maxWidth: 860 }}>
           {HOLDS.map(([k, v]) => (
             <div key={k} style={{ display: "contents" }}>
@@ -220,9 +220,9 @@ export default async function Home() {
 
       <section className="band split">
         <div style={{ padding: "44px var(--pad)" }}>
-          <p className="eyebrow" style={{ marginBottom: 18 }}>
+          <h2 className="eyebrow" style={{ marginBottom: 18 }}>
             Price
-          </p>
+          </h2>
           <p style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16 }}>
             <span className="mono" style={{ fontSize: 44, letterSpacing: "-0.03em", lineHeight: 1 }}>
               {price ?? "-"}
@@ -238,9 +238,9 @@ export default async function Home() {
         </div>
 
         <div style={{ padding: "44px var(--pad)", background: "var(--panel)" }}>
-          <p className="eyebrow" style={{ marginBottom: 18 }}>
+          <h2 className="eyebrow" style={{ marginBottom: 18 }}>
             Watch mode
-          </p>
+          </h2>
           <p className="serif" style={{ fontSize: 30, lineHeight: 1.1, marginBottom: 16 }}>
             Turn a certificate into a record over time.
           </p>
@@ -262,9 +262,9 @@ export default async function Home() {
 
       {recent.length > 0 && (
         <section className="band pad" style={{ paddingTop: 56, paddingBottom: 72 }}>
-          <p className="eyebrow" style={{ marginBottom: 20 }}>
+          <h2 className="eyebrow" style={{ marginBottom: 20 }}>
             Recent captures{stats ? `, ${formatCount(stats.certificates)} on chain` : ""}
-          </p>
+          </h2>
           <div className="scroll-x table-framed">
             <table className="table">
               <thead>

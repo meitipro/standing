@@ -82,11 +82,14 @@ export default async function CertificatePage({ params }: Params) {
         <p className="eyebrow" style={{ marginBottom: 18 }}>
           Captured at
         </p>
-        <span className="stamp">{d}</span>
-        <span className="stamp stamp-time">
-          {t}
-          <span className="stamp-zone"> UTC</span>
-        </span>
+        <h1 style={{ fontWeight: "inherit", letterSpacing: "inherit" }}>
+          <span className="sr-only">Certificate {cert.id}, captured </span>
+          <span className="stamp">{d}</span>
+          <span className="stamp stamp-time">
+            {t}
+            <span className="stamp-zone"> UTC</span>
+          </span>
+        </h1>
         <div style={{ marginTop: 28 }}>
           {isPage ? (
             <a href={cert.url} rel="nofollow noopener noreferrer" target="_blank" className="mono break" style={{ fontSize: 16 }}>
@@ -104,9 +107,9 @@ export default async function CertificatePage({ params }: Params) {
 
       <section className="split">
         <div style={{ padding: "44px var(--pad)" }}>
-          <p className="eyebrow" style={{ marginBottom: 22 }}>
+          <h2 className="eyebrow" style={{ marginBottom: 22 }}>
             {isPage ? "Claims every agreeing validator found on the page" : "Views, as every validator read them"}
-          </p>
+          </h2>
           <ClaimList claims={cert.claims} />
 
           {previous && (
@@ -134,9 +137,9 @@ export default async function CertificatePage({ params }: Params) {
 
         <div className="stack-36" style={{ padding: "44px var(--pad)", background: "var(--panel)" }}>
           <div>
-            <p className="eyebrow" style={{ marginBottom: 14 }}>
+            <h2 className="eyebrow" style={{ marginBottom: 14 }}>
               On-chain record
-            </p>
+            </h2>
             <div className="rec">
               <div className="rec-digest">
                 <div className="rec-digest-head">
@@ -169,9 +172,9 @@ export default async function CertificatePage({ params }: Params) {
       </section>
 
       <section className="band pad" style={{ paddingTop: 40, paddingBottom: 40 }}>
-        <p className="eyebrow" style={{ marginBottom: 14 }}>
+        <h2 className="eyebrow" style={{ marginBottom: 14 }}>
           Cite this
-        </p>
+        </h2>
         <CitationBlock cert={cert} />
         <div className="row" style={{ gap: 10, marginTop: 18 }}>
           <CopyButton value={JSON.stringify(certificateJson(cert), null, 2)} label="Copy the record" done="Copied" className="btn" />
@@ -192,7 +195,7 @@ export default async function CertificatePage({ params }: Params) {
       {/* Most people meet a certificate as an image in a timeline, so the author sees what they hand round. */}
       <section className="band pad" style={{ paddingTop: 44, paddingBottom: 72 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
-          <p className="eyebrow">Share card, 1200 x 630</p>
+          <h2 className="eyebrow">Share card, 1200 x 630</h2>
           <span className="small muted">The image a link to this page unfurls into.</span>
         </div>
         <div className="sharecard shadow-soft">
@@ -225,7 +228,7 @@ export default async function CertificatePage({ params }: Params) {
               <span className="tag tag-ok">image matches text</span>
             )}
             <div className="spacer" />
-            <span className="mono" style={{ fontSize: "clamp(8px, 0.95vw, 12px)", color: "var(--slab-muted)" }}>
+            <span className="mono" style={{ fontSize: "clamp(10px, 0.95vw, 12px)", color: "var(--slab-muted)" }}>
               What this page stated, and when.
             </span>
           </div>
