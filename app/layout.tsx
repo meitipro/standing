@@ -6,6 +6,7 @@ import "./globals.css";
 import Mark from "@/components/Mark";
 import ConnectButton from "@/components/ConnectButton";
 import NavLinks from "@/components/NavLinks";
+import FaucetButton from "@/components/FaucetButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import { CHAIN, EXPLORER, IS_LIVE, ORIGIN, STANDING } from "@/lib/chain";
 import { shortAddress } from "@/lib/format";
@@ -47,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="#content" className="skip">
             Skip to content
           </a>
-          <header style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--bg)", borderBottom: "1px solid var(--line)" }}>
+          <header className="masthead-bar">
             <div className="shell pad masthead">
               <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)" }}>
                 <Mark size={26} />
@@ -58,8 +59,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
               <div className="spacer" />
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
                 <ThemeToggle />
+                <FaucetButton />
                 <ConnectButton />
               </div>
             </div>

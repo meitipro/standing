@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -26,6 +27,7 @@ export default function WatchForm({ fee }: { fee: string | null }) {
   const [captures, setCaptures] = useState(12);
   const [stage, setStage] = useState<WriteStage>("idle");
   const [error, setError] = useState("");
+  const [watchedId, setWatchedId] = useState<string | null>(null);
 
   const busy = stage !== "idle" && stage !== "failed";
   const valid = Number.isInteger(captures) && captures >= LIMITS.MIN_WATCH_CAPTURES && captures <= LIMITS.MAX_WATCH_CAPTURES;
@@ -56,6 +58,7 @@ export default function WatchForm({ fee }: { fee: string | null }) {
       router.push(`/w/${watchId}`);
     } catch (e: any) {
       setStage("failed");
+      setWatchedId(/already_watched:(\d+)/.exec(String(e?.message ?? ""))?.[1] ?? null);
       setError(readableError(e));
     }
   }
@@ -130,6 +133,12 @@ export default function WatchForm({ fee }: { fee: string | null }) {
       {error && (
         <div className="notice notice-flag" role="alert">
           {error}
+          {watchedId !== null && (
+            <>
+              {" "}
+              <Link href={`/w/${watchedId}`}>Open watch {watchedId}</Link>
+            </>
+          )}
         </div>
       )}
     </form>

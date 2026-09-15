@@ -1453,6 +1453,10 @@ footer.slab a {
   line-height: 1.45;
 }
 
+.connect-ok {
+  border-color: var(--accent);
+}
+
 .linklike {
   display: inline-flex;
   align-items: center;
@@ -1478,6 +1482,22 @@ footer.slab a {
  * and two buttons do not fit in 320px, and a header that refuses to wrap
  * scrolls the whole page sideways.
  */
+/* Sticky on a wide screen. On a phone the wrapped header is three rows tall,
+ * and pinned it would cover a quarter of the screen for the whole visit. */
+.masthead-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 720px) {
+  .masthead-bar {
+    position: static;
+  }
+}
+
 .masthead {
   min-height: 64px;
   display: flex;

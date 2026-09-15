@@ -261,6 +261,10 @@ export async function openWatch(
   opts: { address: `0x${string}`; url: string; cadenceHours: number; captures: number } & Staged,
 ): Promise<{ watchId: number; hash: string }> {
   const target = normalised(opts.url);
+  /* On Studio a refused payable call keeps what was sent with it, so a page
+   * that is already watched is caught here, before anyone signs. */
+  const existing = await readJson<any>("watch_for_url", [target]);
+  if (existing?.active) throw new Error(`already_watched:${existing.id}`);
   const { fee } = await readStats();
   const hash = await send({
     ...opts,
@@ -368,6 +372,8 @@ export function readableError(e: any): string {
   const raw = e?.message ?? e?.data?.message ?? e?.shortMessage ?? (typeof e === "string" ? e : "");
   if (/user rejected|denied|4001/i.test(raw)) return "You cancelled the signature.";
   if (/no_wallet/.test(raw)) return "No wallet was found in this browser.";
+  const watched = /already_watched:(\d+)/.exec(raw);
+  if (watched) return `That page is already watched, as watch ${watched[1]}. Its owner can top that one up.`;
   if (/not_deployed/.test(raw)) return "This site is not pointed at a Standing contract yet.";
   if (/capture_not_found|watch_not_found|assessment_not_found/.test(raw)) {
     return "The transaction went through, but the new record could not be read back yet. Reload in a moment.";
