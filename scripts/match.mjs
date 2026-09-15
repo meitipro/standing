@@ -1,7 +1,7 @@
 /**
  * Is the deployed contract this repository's contract?
  *
- *   npm run match -- 0xCONTRACT --network=studio
+ *   npm run match -- 0xCONTRACT
  *
  * Reads the deployed source back with gen_getContractCode, compares it with
  * contracts/standing.py, and runs genvm-lint over the deployed bytes, because
@@ -55,7 +55,7 @@ async function deployedSource(attempts = 4) {
 }
 
 if (!address) {
-  console.error("\n  Usage: npm run match -- 0xCONTRACT --network=studio\n");
+  console.error("\n  Usage: npm run match -- 0xCONTRACT\n");
   process.exitCode = 1;
 } else {
   const local = readFileSync(CONTRACT, "utf8");

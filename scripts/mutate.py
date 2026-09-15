@@ -61,11 +61,19 @@ MUTANTS = [
     ("a proposal of one claim is enough",
      "    if _normalise_claims(claims) != claims or len(claims) < MIN_CLAIMS:",
      "    if _normalise_claims(claims) != claims:"),
-    ("a validator trusts the leader's refusal instead of reading the page",
-     "            text, shot = _read_page(target)\n            mine = _extract(text, shot)\n"
+    ("a validator judges the leader before reading the page itself",
+     "            try:\n                text, shot = _read_page(target)\n                mine = _extract(text, shot)\n"
+     "            except gl.vm.UserError as error:\n                return _same_refusal(leader_res, error)\n"
      "            if not isinstance(leader_res, gl.vm.Return):\n                return False",
      "            if not isinstance(leader_res, gl.vm.Return):\n                return False\n"
-     "            text, shot = _read_page(target)\n            mine = _extract(text, shot)"),
+     "            try:\n                text, shot = _read_page(target)\n                mine = _extract(text, shot)\n"
+     "            except gl.vm.UserError as error:\n                return _same_refusal(leader_res, error)"),
+    ("a refusing validator agrees with any leader",
+     "    return isinstance(leader_res, gl.vm.UserError) and leader_res.data == error.data",
+     "    return True"),
+    ("refusals agree whatever their sentence",
+     "    return isinstance(leader_res, gl.vm.UserError) and leader_res.data == error.data",
+     "    return isinstance(leader_res, gl.vm.UserError)"),
     ("cloaking is stored inverted",
      lit('    return res["claims"].split("~n~"), res["match"] == "no"'),
      lit('    return res["claims"].split("~n~"), res["match"] == "yes"')),

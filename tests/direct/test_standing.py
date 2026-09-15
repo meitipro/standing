@@ -92,6 +92,14 @@ class Notarize(unittest.TestCase):
         with self.assertRaises(D.Disagreement):
             w.call("notarize", URL, value=FEE)
 
+    def test_two_different_refusals_are_not_agreement(self):
+        w = World()
+        w.page(URL, ["the only thing it says"], nodes=[0])
+        w.page(URL, BEFORE, status=403, nodes=range(1, 5))
+        with self.assertRaises(D.Disagreement):
+            w.call("notarize", URL, value=FEE)
+        self.assertEqual(w.view("stats")["certificates"], 0)
+
     def test_a_thin_page_is_refused(self):
         w = World()
         w.page(URL, BEFORE, text="  Accept cookies  ")

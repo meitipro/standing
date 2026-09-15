@@ -5,7 +5,7 @@ is one guard in `contracts/standing.py` deleted or loosened on purpose, and
 the first test that failed because of it. The generator writes this file
 only when every mutant is caught.
 
-**47 of 47 caught.**
+**49 of 49 caught.**
 
 | What was broken | Caught by |
 | --- | --- |
@@ -14,13 +14,15 @@ only when every mutant is caught.
 | a validator ignores its own image check | `test_standing.Notarize.test_the_image_check_is_compared_exactly` |
 | a proposal need not be normalised | `test_helpers: unsorted claims are refused` |
 | a proposal of one claim is enough | `test_helpers: one claim is too few` |
-| a validator trusts the leader's refusal instead of reading the page | `test_standing.Notarize.test_a_page_blocked_for_everyone_is_refused_with_its_reason` |
+| a validator judges the leader before reading the page itself | `test_standing.Notarize.test_a_page_blocked_for_everyone_is_refused_with_its_reason` |
+| a refusing validator agrees with any leader | `test_standing.Notarize.test_two_different_refusals_are_not_agreement` |
+| refusals agree whatever their sentence | `test_standing.Notarize.test_two_different_refusals_are_not_agreement` |
 | cloaking is stored inverted | `test_standing.Notarize.test_a_page_every_node_confirms_is_certified` |
 | an unreadable image check counts as a match | `test_standing.Notarize.test_an_unreadable_image_check_is_refused` |
 | the fence does nothing | `test_standing.Notarize.test_an_injected_block_arrives_as_text` |
 | the page reaches the extraction prompt unfenced | `test_standing.Notarize.test_an_injected_block_arrives_as_text` |
 | the page reaches the check prompt unfenced | `test_standing.Notarize.test_an_injected_block_arrives_as_text` |
-| numbered lines reach the model unfenced | `test_static.Prompts.test_numbered_lines_pass_through_the_fence` |
+| numbered lines reach the model unfenced | `test_standing.Notarize.test_an_injected_block_arrives_as_text` |
 | only one presentation order is asked | `test_standing.Assess.test_both_orders_are_asked_and_the_ids_do_not_move` |
 | the orders' disagreement is forgiven | `test_standing.Assess.test_a_position_bias_lands_in_the_value_as_unclear` |
 | a judgment agrees on the verdict alone | `test_helpers: different lines disagree` |

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
+import { getAddress } from "viem";
 
-import { NETWORK_NAME, RPC_URL } from "@/lib/chain";
+import { RPC_URL } from "@/lib/chain";
 
 /**
- * Put test GEN in a visitor's wallet on GenLayer Studio.
+ * Put test GEN in a visitor's wallet on GenLayer Studio Next.
  *
- * Studio charges no gas, which reads as "you need no balance". That is true of
- * gas only: every Standing write carries a price, so a fresh wallet could read
- * everything and certify nothing. This closes that, on Studio alone.
+ * Every Standing write there carries a price and a fee deposit, so a fresh
+ * wallet could read everything and certify nothing. This closes that.
  *
  * Runs on the server because Studio's RPC is not guaranteed to answer a
  * browser's CORS check, and so the amount is not a number the page can edit.
@@ -54,18 +54,16 @@ async function balanceOf(address: string): Promise<bigint> {
 }
 
 export async function POST(req: Request) {
-  if (NETWORK_NAME !== "studio") {
-    return NextResponse.json(
-      { error: "not_studio", message: "This faucet exists only on GenLayer Studio. Other networks have their own faucet." },
-      { status: 400 },
-    );
-  }
-
   const body = await req.json().catch(() => ({}));
-  const address = String(body?.address ?? "");
-  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+  const given = String(body?.address ?? "");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(given)) {
     return NextResponse.json({ error: "bad_address", message: "That is not a wallet address." }, { status: 400 });
   }
+  /* Checksummed, always. Measured on Studio Next on 2026-09-16: given a
+   * lowercased address, which is what a wallet hands back, sim_fundAccount
+   * answers with a hash and the balance never moves; given the checksummed
+   * form, the credit lands within three seconds. */
+  const address = getAddress(given.toLowerCase());
 
   const key = address.toLowerCase();
   const since = Date.now() - (lastCall.get(key) ?? 0);

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { captureWatch, closeWatch, connectWallet, readableError, topUpWatch, IS_LIVE, NETWORK_NAME } from "@/lib/chain";
+import { captureWatch, closeWatch, connectWallet, readableError, topUpWatch, IS_LIVE } from "@/lib/chain";
 import { formatGen, formatStamp, shortAddress } from "@/lib/format";
 import { LIMITS } from "@/lib/limits";
 import type { WriteStage } from "@/lib/types";
@@ -153,13 +153,6 @@ export default function WatchActions({
             refunds whatever it still holds.
           </p>
         ))}
-
-      {active && isOwner && NETWORK_NAME === "studio" && (
-        <p className="tiny muted">
-          On GenLayer Studio a refund leaves the contract as a transfer that Studio does not
-          deliver to a wallet, so the wallet balance there will not rise.
-        </p>
-      )}
 
       {busy && (
         <p className="small muted" aria-live="polite">

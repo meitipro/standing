@@ -206,16 +206,31 @@ class Runtime(unittest.TestCase):
                 self.assertTrue(CLOSURES & set(stack), f"{node.func.id} called from {stack}")
 
     def test_no_block_nests_inside_another(self):
+        blocks = 0
         for node, stack in with_stacks(TREE):
             if isinstance(node, ast.Call) and ast.unparse(node.func) == "gl.vm.run_nondet":
+                blocks += 1
                 self.assertFalse(CLOSURES & set(stack))
+        self.assertEqual(blocks, 2)
+
+    def test_the_contract_is_written_against_the_v06_api(self):
+        """Studio Next runs runtime 5jycge4q, which renamed these. An old name
+        passes lint and fails on the node, so none may come back."""
+        self.assertTrue(SOURCE.startswith("# v0.3.0\n"))
+        self.assertIn("py-genlayer:5jycge4q", SOURCE.split("\n")[1])
+        for old in ("gl.Contract)", "gl.get_contract_at", "gl.message_raw", "run_nondet_unsafe", "run_nondet_default", "on=\"accepted\""):
+            self.assertNotIn(old, SOURCE)
 
     def test_validators_read_for_themselves_before_judging_the_leader(self):
-        firsts = {}
-        for method in ("_capture", "_judge"):
+        """A validator's first act is its own reading, and a refusal from it is
+        agreement only with the same refusal from the leader."""
+        for method, first_call in (("_capture", "_read_page"), ("_judge", "leader_fn")):
             closure = next(n for n in nodes_in(METHODS[method], ast.FunctionDef) if n.name == "validator_fn")
-            firsts[method] = ast.unparse(closure.body[0].value.func)
-        self.assertEqual(firsts, {"_capture": "_read_page", "_judge": "leader_fn"})
+            guard = closure.body[0]
+            self.assertIsInstance(guard, ast.Try, method)
+            self.assertEqual(ast.unparse(guard.body[0].value.func), first_call, method)
+            self.assertEqual(ast.unparse(guard.handlers[0].type), "gl.vm.UserError", method)
+            self.assertIn("_same_refusal(leader_res, error)", ast.unparse(guard.handlers[0]), method)
 
     def test_the_only_clock_is_the_transaction_datetime(self):
         clocks = {"now", "utcnow", "today", "time", "monotonic", "perf_counter"}
@@ -223,9 +238,12 @@ class Runtime(unittest.TestCase):
             if isinstance(call.func, ast.Attribute):
                 self.assertNotIn(call.func.attr, clocks, ast.unparse(call))
         self.assertNotIn("import time", SOURCE)
+        reads = 0
         for node, stack in with_stacks(TREE):
-            if isinstance(node, ast.Attribute) and ast.unparse(node) == "gl.message_raw":
+            if isinstance(node, ast.Attribute) and ast.unparse(node) == "gl.message.raw":
+                reads += 1
                 self.assertEqual(stack[-1], "_now")
+        self.assertEqual(reads, 1)
 
     def test_nothing_is_compared_by_identity(self):
         for compare in nodes_in(TREE, ast.Compare):

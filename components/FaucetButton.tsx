@@ -2,22 +2,20 @@
 
 import { useState } from "react";
 
-import { NETWORK_NAME, connectWallet, readableError } from "@/lib/chain";
+import { connectWallet, readableError } from "@/lib/chain";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const FAUCET_GEN = 100;
 
 /**
- * Test GEN for a visitor, on GenLayer Studio only. It connects first when the
- * wallet is not connected, so one press does the whole job, and the result
- * stays on screen until dismissed.
+ * Test GEN for a visitor, from Studio Next's own faucet. It connects first
+ * when the wallet is not connected, so one press does the whole job, and the
+ * result stays on screen until dismissed.
  */
 export default function FaucetButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
-
-  if (NETWORK_NAME !== "studio") return null;
 
   async function fund() {
     setBusy(true);

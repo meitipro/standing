@@ -5,26 +5,35 @@ line endings.
 
 ```bash
 npm run lint:contract                     # genvm-lint check: the AST pass and a load against the SDK
-python contracts/test_helpers.py          # the pure half, 150 checks
-python -m unittest discover -s tests/direct   # the contract against a GenVM double, 61 tests
-python scripts/mutate.py                  # 47 mutants, each must be caught
+python contracts/test_helpers.py          # the pure half, 153 checks
+python -m unittest discover -s tests/direct   # the contract against a GenVM double, 63 tests
+python scripts/mutate.py                  # 49 mutants, each must be caught
 ```
 
 ## API names, checked against the pinned SDK
 
-The runtime is `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6`.
-Every name below was read from that SDK's source, not from documentation.
+The file opens with `# v0.3.0` and depends on
+`py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng`, the GenVM v0.6 runtime
+that GenLayer Studio Next runs. Every name below was read from that runtime's standard
+library, not from documentation.
 
 | Used | For |
 | --- | --- |
-| `gl.vm.run_nondet(leader_fn, validator_fn)` | Both blocks. The validator runs sandboxed, and a refusal agrees with a refusal only when the messages match |
-| `gl.vm.Return`, `gl.vm.UserError` | Reading the leader's result, and every refusal |
+| `gl.contract.Contract` | The base class. `import genlayer as gl` is explicit: the star import no longer binds `gl` |
+| `DynArray`, `TreeMap`, `allow` from `genlayer.storage` | Storage types, and the storage-class decorator, imported as `allow_storage` because that is the name the linter checks |
+| `gl.vm.run_nondet(leader_fn, validator_fn)` | Both blocks. The validator is handed the leader's result as it came back, and a validator that raises counts as a vote against |
+| `gl.vm.Return`, `gl.vm.UserError` | Reading the leader's result, and every refusal. A refusal's sentence is its `.data` |
 | `gl.nondet.web.get(url).status` | The status, before anything expensive |
 | `gl.nondet.web.render(url, mode="text" or "screenshot")` | The text window and the screenshot, which renders as an `Image` with `.raw` |
 | `gl.nondet.exec_prompt(prompt, images=[...], response_format="json")` | The three prompts |
-| `gl.get_contract_at(address).view()` | A snapshot's reads, by name |
-| `gl.get_contract_at(address).emit_transfer(value=...)` | Refunds and withdrawals, sent on finality |
-| `gl.message_raw["datetime"]` | The only clock. There is no block timestamp |
+| `gl.contract.get_at(Address).view()` | A snapshot's reads, by name |
+| `gl.contract.get_at(Address).emit_transfer(value=...)` | Refunds and withdrawals, sent on finality |
+| `gl.message.raw["datetime"]` | The only clock. There is no block timestamp |
+
+`run_nondet` rather than the sandboxed `run_nondet_default`, because genvm-lint 0.11.1rc2
+recognises only `run_nondet` and `run_nondet_unsafe` as blocks, and fails every
+`gl.nondet` call reached from the other. The cost is that a refusal is no longer compared
+for the contract, so each validator compares it itself; see below.
 
 ## Consensus
 
@@ -34,9 +43,10 @@ The leader fetches the page, renders its text window and a screenshot, and asks 
 for two to six claims and whether the screenshot shows them. It returns a flat dict of
 two strings: the normalised claims joined by newlines, and `yes` or `no`.
 
-Each validator first reads the page itself and runs the same extraction. That raises the
-same refusal the leader raised when a page is blocked or empty, so a unanimous refusal
-arrives as its sentence rather than as a disagreement. Then it checks:
+Each validator first reads the page itself and runs the same extraction. If that
+refuses, the validator agrees only with a leader that refused with the same sentence
+(`_same_refusal`), so a page blocked for every node arrives as its sentence rather than as
+a disagreement. Otherwise it checks:
 
 1. The proposal is exactly the shape a leader could honestly produce: two keys, string
    values, claims already normalised, between two and six of them.
@@ -59,7 +69,8 @@ Each answer is `material` with the ids of the lines that carry the difference, o
 `immaterial`. An answer the contract cannot act on, such as a line id the question never
 had or `material` naming no line, counts as `unclear`. The block resolves to the answer
 both orders gave, or `unclear` when they differ, and validators compare that resolved
-answer exactly. The stored verdict and lines are the compared value.
+answer exactly. The stored verdict and lines are the compared value. A validator whose
+own asking refuses agrees only with the same refusal, as in a capture.
 
 The question is filed under a digest of the url and both sets of lines, so the same change
 is answered once whichever pair asks it.
@@ -114,8 +125,10 @@ test compares them.
 
 - **Name the class after the product.** `genvm-lint validate` skips a class named
   `Contract`, and reports "No contract class found" for a contract that is fine.
-- **Pin the GenVM bundle.** The linter loads the newest bundle in its cache, and a later
-  one does not ship this runtime. `scripts/lint-contract.mjs` sets `GENVM_VERSION`.
+- **Use the v0.6 linter, and pin its bundle.** genvm-linter 0.11.0 knows no GenVM past
+  v0.3.0-rc7, so it cannot load this runtime; 0.11.1rc2 can. The linter also loads the
+  newest bundle in its cache, so `scripts/lint-contract.mjs` runs the one in `.venv` with
+  `GENVM_VERSION=v0.6.0-rc5`, the bundle that ships `5jycge4q`.
 - **Only printable ascii urls.** Python's urlsplit and a browser's url parser disagree
   outside that range and on bracketed hosts, and one disagreement is enough for a lookup
   by url to miss. Refusing both is what lets the browser's copy of the guard agree exactly.
@@ -123,16 +136,21 @@ test compares them.
   not exist, so snapshot urls keep the checksummed form and the site sends it.
 - **A string, not an Address, for address parameters.** genlayer-js sends a hex string as
   a string.
-- **Refunds on studionet.** An `emit_transfer` payout has been measured on another contract
-  not to credit the payee there. The contract's accounting is right either way; check the
-  recipient's balance after a close.
+- **A payout has to be declared.** On consensus v0.6 a transfer out of the contract is an
+  external message, funded only when the transaction declares it at the root of its
+  message tree: the payee, the unnamed call key of a value transfer, and a budget. The
+  site declares one for `close_watch`. Whoever calls `withdraw_fees` has to declare one for
+  the `to` address, or the transfer fails with `fee no_matching_allocation # external`.
 
 ## Deploying
 
 ```bash
-npm run deploy -- --network=studio      # reads STANDING_DEPLOYER_KEY from the shell
-npm run verify -- 0xADDRESS --network=studio
-npm run match -- 0xADDRESS --network=studio
+npm run deploy -- --fund      # reads STANDING_DEPLOYER_KEY from the shell; --fund asks Studio Next's faucet first
+npm run verify -- 0xADDRESS
+npm run match -- 0xADDRESS
 ```
 
-The constructor takes one argument, the capture price in wei, at least four.
+The constructor takes one argument, the capture price in wei, at least four. Every
+transaction on Studio Next carries a fee deposit beside its value. The scripts and the
+site ask for the most time a phase may have, 600 time units, and what the validators do
+not spend comes back at finalization.
