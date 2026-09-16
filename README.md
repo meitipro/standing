@@ -47,6 +47,44 @@ screen is read back from the contract.
 
 ---
 
+## Live on GenLayer Studio
+
+The contract is deployed on GenLayer Studio, chain 61999, at
+[`0xc170960F46e8e0190544dfA3579120D843Bf3970`](https://explorer-studio.genlayer.com/address/0xc170960F46e8e0190544dfA3579120D843Bf3970),
+and the site that reads it is [getstanding.xyz](https://getstanding.xyz). Every
+line below was read back off the chain.
+
+| What | Transaction |
+| --- | --- |
+| The contract, deployed | [`0xf0e75a15`](https://explorer-studio.genlayer.com/tx/0xf0e75a151c773a52c1dccb532ae89b904853c1565e9cc3dd19a223bf5ac9155e) |
+| A capture that was agreed: `www.field-works.xyz`, six claims | [`0xeb848d7c`](https://explorer-studio.genlayer.com/tx/0xeb848d7cd50514728ca1b4b5d06adcc4e95ba4b61b2519e77b2e89e06be7dd83) |
+| A capture that was refused: `the page answered with an error status` | [`0x0b8b00ea`](https://explorer-studio.genlayer.com/tx/0x0b8b00eaeefc037d76a27c51c1f13fcaa840ba080c8fa7254bddabecccee5938) |
+| A watch opened over the same page, four captures prepaid | [`0xa8dd4fdc`](https://explorer-studio.genlayer.com/tx/0xa8dd4fdcef4abb0dbcc052161e4e7068b06c467db2a1701e09a7c7d7aadf4e1c) |
+| Two contracts snapshotted in one transaction | [`0x344247c5`](https://explorer-studio.genlayer.com/tx/0x344247c5adf932ddd3ed9b34a3ef5970c59a4430c055a6b39c4067e0fceb5a44) |
+| That watch closed, and its prepay released | [`0xca2a82bd`](https://explorer-studio.genlayer.com/tx/0xca2a82bd62f9fe69ad3f12e7cbd59122c23a7c0989a8c1adda241d0e3f22f696) |
+
+Certificate 0 is the page capture. Its six claims are the ones every validator
+found on the copy it read itself, and its digest,
+`efb322987b8834f7981f24e400b59f8d9e168464939719fd8a3e765307217bcd`, is
+recomputed from those claims by [the verify page](https://getstanding.xyz/verify).
+
+Three things this deployment says plainly:
+
+- **The capture price is four wei**, the contract's floor, so the site renders
+  every price as `0 GEN`. The prices are still exact: a payment of anything but
+  the price is refused before a page is fetched.
+- **The refund left the contract and did not arrive.** Closing the watch
+  released its prepay, and the transfer the contract emitted answers
+  `Contract 0x3e1D... not found`: Studio delivers a payout as a contract call
+  and a wallet is not a contract. The watch's own accounting is settled either
+  way, which is what the record shows.
+- **The deployed bytes came through the Studio editor**, which rewrites line
+  endings, so `npm run match` reports COSMETIC ONLY rather than MATCH: the same
+  source, CRLF where this repository has LF, and `genvm-lint` passes over the
+  deployed bytes as it does over the file.
+
+---
+
 ## How it works
 
 | | Step | What the contract does |
@@ -88,7 +126,7 @@ a deterministic call, and nothing about it is safe for one party to compute.
 
 **20 methods, 10 view and 10 write**, `genvm-lint` clean. There is no build step between
 the source and the chain: the running site serves the file at
-[`/api/contract-source`](https://standing-henna.vercel.app/api/contract-source), and
+[`/api/contract-source`](https://getstanding.xyz/api/contract-source), and
 `npm run match` compares it byte for byte with what an address returns.
 
 ### Behaviour worth knowing
