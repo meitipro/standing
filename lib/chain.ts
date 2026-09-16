@@ -1,43 +1,51 @@
 /**
- * Wiring to the Standing contract on GenLayer Studio Next.
+ * Wiring to the Standing contract on GenLayer.
  *
  * Writes go through the reader's own wallet. The site holds no key and signs
  * nothing, so every capture, watch and question on chain was paid for by the
  * account that asked. Reads go through lib/store.ts on the server.
- *
- * Studio Next runs consensus v0.6, where every write carries a fee deposit
- * beside the price the contract asks. The deposit pays the validators for the
- * time they spend, and what they do not spend comes back at finalization.
  */
 
-import {
-  createClient,
-  deriveExternalMessageCallKey,
-  encodeExternalMessageFeeParams,
-  MESSAGE_ALLOCATION_ROOT_PARENT_INDEX,
-} from "genlayer-js";
-import { studioDevnet } from "genlayer-js/chains";
+import { createClient } from "genlayer-js";
+import { studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
+import { TransactionStatus } from "genlayer-js/types";
 import { getAddress } from "viem";
 
-import { formatGen } from "./format";
 import type { Stats, WriteStage } from "./types";
 import { checkUrl, withScheme } from "./url";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/* Studio Next is the SDK's studioDevnet: studio-next.genlayer.com and
- * studio-dev.genlayer.com are one network, chain 61997. The organisers name
- * the first, so its RPC is pinned here, and so is the explorer, which the SDK
- * leaves unset for this network. scripts/network.mjs pins the same two. */
-export const CHAIN = {
-  ...studioDevnet,
-  name: "GenLayer Studio Next",
-  rpcUrls: { default: { http: ["https://studio-next.genlayer.com/api"] } },
-} as typeof studioDevnet;
+/* Which network this build talks to. A contract address is per network, so
+ * changing this without changing NEXT_PUBLIC_STANDING_ADDRESS gives a site
+ * that cannot find its own contract. */
+const NETWORKS = {
+  bradbury: testnetBradbury,
+  asimov: testnetAsimov,
+  studio: studionet,
+} as const;
 
-export const EXPLORER = "https://explorer-studio-dev.genlayer.com";
+type NetworkName = keyof typeof NETWORKS;
+
+/* GenLayer Studio is the default, because that is where the contract is
+ * deployed. A default that disagrees with the deployment is a trap: the site
+ * reads a network the address does not live on and shows empty states. */
+const requested = (process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "studio") as NetworkName;
+
+export const NETWORK_NAME: NetworkName = requested in NETWORKS ? requested : "studio";
+
+export const CHAIN = NETWORKS[NETWORK_NAME];
+
+/* Studio's chain definition names an explorer host that answers 503. The one
+ * that serves Studio transactions is pinned here instead. */
+export const EXPLORER =
+  NETWORK_NAME === "studio"
+    ? "https://explorer-studio.genlayer.com"
+    : (CHAIN.blockExplorers?.default.url ?? "https://explorer-bradbury.genlayer.com").replace(/\/$/, "");
 
 export const RPC_URL = CHAIN.rpcUrls.default.http[0];
+
+export const FAUCET_URL = "https://testnet-faucet.genlayer.foundation/";
 
 export const STANDING = (process.env.NEXT_PUBLIC_STANDING_ADDRESS || "") as `0x${string}`;
 
@@ -110,33 +118,17 @@ function isTransientRpc(e: unknown): boolean {
   return /fetch failed|ECONNRESET|socket|network|timed out|timeout|Server busy|-32006|rate limit|unknown RPC/i.test(msg);
 }
 
-/** One call, retried while the failure is the connection's and not the chain's. */
-async function retried<T>(fn: () => Promise<T>, attempts = 4, first = 1200, cap = 10000): Promise<T> {
-  let wait = first;
+async function waitFor(client: any, hash: string, status: TransactionStatus, attempts = 6): Promise<any> {
+  let wait = 2000;
   for (let i = 1; ; i += 1) {
     try {
-      return await fn();
+      return await client.waitForTransactionReceipt({ hash, status });
     } catch (e) {
       if (i >= attempts || !isTransientRpc(e)) throw e;
       await new Promise((r) => setTimeout(r, wait));
-      wait = Math.min(Math.round(wait * 1.8), cap);
+      wait = Math.min(Math.round(wait * 1.8), 15000);
     }
   }
-}
-
-/**
- * Until the validators have decided. A capture reads a page and asks a model
- * on every node, so the poll runs for up to six minutes. The full transaction
- * is asked for because the simplified receipt drops the leader's result, and
- * that is where a refusal's sentence is.
- */
-function waitFor(client: any, hash: string): Promise<any> {
-  return retried(
-    () => client.waitForTransactionReceipt({ hash, waitUntil: "decided", fullTransaction: true, interval: 3000, retries: 120 }),
-    6,
-    2000,
-    15000,
-  );
 }
 
 /** The sentence the contract refused with, from whichever shape the node sent. */
@@ -152,28 +144,36 @@ function refusalText(round: any): string {
 }
 
 /**
- * Throw unless the contract ran the call and returned.
+ * Throw if the contract refused the call, however the receipt reads.
  *
- * A decided transaction is not a successful one. The validators can decide
- * that they could not agree, and they can agree that the contract refused:
- * refusing is a transaction that completed. Only the execution result, which
- * v0.6 reports at the top of the receipt, says the code returned.
+ * A receipt carries three fields that look like a verdict and two of them do
+ * not mean "my code ran": the status is final on a refused call, because
+ * refusing is a successful transaction, and the result is agreement, because
+ * validators agreeing that a call failed is still agreement. Only the leader
+ * receipt's execution_result answers the question.
  */
 function assertExecuted(receipt: any, what: string): void {
-  const outcome = receipt?.lifecycle?.outcome;
-  if (outcome && outcome !== "accepted") throw new Error(`no_agreement:${outcome}`);
-  const execution = String(receipt?.txExecutionResultName ?? "");
-  if (execution === "FINISHED_WITH_RETURN") return;
-  if (execution === "NONDET_DISAGREE" || execution === "TIMEOUT") throw new Error(`no_agreement:${execution}`);
-  const lr = receipt?.consensus_data?.leader_receipt;
+  const lr = receipt?.consensus_data?.leader_receipt ?? receipt?.consensusData?.leaderReceipt;
   const rounds = Array.isArray(lr) ? lr : lr ? [lr] : [];
   const leader = rounds.find((r: any) => String(r?.mode ?? "").toLowerCase() === "leader") ?? rounds[0];
+  if (!leader) return;
+  const exec = String(leader.execution_result ?? leader.executionResult ?? "");
+  if (exec === "" || exec.toUpperCase() === "SUCCESS") return;
   throw new Error(refusalText(leader) || `${what} was refused by the contract`);
 }
 
 /** One view, retried: reads are free and idempotent. */
-export function readView(functionName: string, args: unknown[] = []): Promise<any> {
-  return retried(() => (readClient() as any).readContract({ address: STANDING, functionName, args }));
+export async function readView(functionName: string, args: unknown[] = [], attempts = 4): Promise<any> {
+  let wait = 1200;
+  for (let i = 1; ; i += 1) {
+    try {
+      return await (readClient() as any).readContract({ address: STANDING, functionName, args });
+    } catch (e) {
+      if (i >= attempts || !isTransientRpc(e)) throw e;
+      await new Promise((r) => setTimeout(r, wait));
+      wait = Math.min(Math.round(wait * 1.8), 10000);
+    }
+  }
 }
 
 /** Every Standing view returns JSON text with sorted keys. */
@@ -202,60 +202,6 @@ export async function readStats(): Promise<Stats> {
 }
 
 /* -------------------------------------------------------------------------
- * The fee deposit.
- *
- * Asked for at the most time Studio Next lets a phase have, because a capture
- * reads a page and asks a model on every node, and a deposit that runs out
- * part way wastes the capture. It is refundable: what is not spent comes back.
- * ---------------------------------------------------------------------- */
-
-/** Studio Next accepts 30 to 600 time units per phase. */
-const TIMEUNITS = 600;
-
-/* A refund leaves the contract as an external message, and consensus v0.6
- * funds one only when the transaction declares it at the root of its message
- * tree: the payee, the unnamed call key of a plain value transfer, and a
- * budget for the transfer's gas. Without it the transfer fails with
- * "fee no_matching_allocation # external", after everything else has run. */
-const PAYOUT_BUDGET = 10n ** 15n;
-const PAYOUT_GAS = { gasLimit: 100_000n, maxGasPrice: 10n ** 9n };
-
-function payoutNode(payee: string) {
-  return {
-    messageType: 0,
-    onAcceptance: false,
-    parentIndex: MESSAGE_ALLOCATION_ROOT_PARENT_INDEX,
-    recipient: getAddress(payee.toLowerCase()),
-    callKey: deriveExternalMessageCallKey("0x"),
-    budget: PAYOUT_BUDGET,
-    feeParams: encodeExternalMessageFeeParams(PAYOUT_GAS),
-  };
-}
-
-type Fees = { distribution: any; feeValue: bigint; messageAllocations?: any[] };
-
-/** The deposit for one write, or none when the network charges nothing. */
-async function feeDeposit(client: any, payee?: string): Promise<Fees | undefined> {
-  const options: any = { leaderTimeunitsAllocation: TIMEUNITS, validatorTimeunitsAllocation: TIMEUNITS, rotations: [1] };
-  /* The SDK derives the message total from the allocations. A stated 0 beside
-   * a budget reverts at submission with MessageAllocationsNotEqualBudget. */
-  if (payee) options.messageAllocations = [payoutNode(payee)];
-  else options.totalMessageFees = 0;
-  const estimate = await retried(() => client.estimateTransactionFees(options) as Promise<any>);
-  if (estimate?.policy?.enabled === false) return undefined;
-  const fees: Fees = { distribution: estimate.distribution, feeValue: BigInt(estimate.feeValue) };
-  const allocations = estimate.messageAllocations?.length ? estimate.messageAllocations : options.messageAllocations;
-  if (allocations) fees.messageAllocations = allocations;
-  return fees;
-}
-
-function signingNote(value: bigint, fees?: Fees): string {
-  const price = value > 0n ? `${formatGen(value)} GEN to the contract` : "no price";
-  if (!fees) return `Confirm in your wallet: ${price}.`;
-  return `Confirm in your wallet: ${price}, plus a fee deposit of ${formatGen(fees.feeValue)} GEN. What the validators do not use comes back.`;
-}
-
-/* -------------------------------------------------------------------------
  * Writes. Every one reads its price from the contract immediately before it
  * signs, because the contract accepts only the exact price.
  * ---------------------------------------------------------------------- */
@@ -269,23 +215,19 @@ async function send(opts: {
   value: bigint;
   what: string;
   note?: string;
-  /** Who the call pays out to, when it can. */
-  payee?: string;
 } & Staged): Promise<string> {
   if (!IS_LIVE) throw new Error("not_deployed");
   const client = writeClient(opts.address, getProvider());
-  const fees = await feeDeposit(client, opts.payee);
-  opts.onStage?.("signing", signingNote(opts.value, fees));
+  opts.onStage?.("signing");
   const hash = await client.writeContract({
     address: STANDING,
     functionName: opts.functionName,
     args: opts.args as any,
     value: opts.value,
-    ...(fees ? { fees } : {}),
   });
   opts.onStage?.("sent", opts.note);
-  const decided = await waitFor(client, hash);
-  assertExecuted(decided, opts.what);
+  const accepted = await waitFor(client, hash, TransactionStatus.ACCEPTED);
+  assertExecuted(accepted, opts.what);
   opts.onStage?.("accepted");
   return hash;
 }
@@ -322,8 +264,8 @@ export async function openWatch(
   opts: { address: `0x${string}`; url: string; cadenceHours: number; captures: number } & Staged,
 ): Promise<{ watchId: number; hash: string }> {
   const target = normalised(opts.url);
-  /* A page that is already watched is caught here, before anyone signs for a
-   * call the contract would refuse. */
+  /* On Studio a refused payable call keeps what was sent with it, so a page
+   * that is already watched is caught here, before anyone signs. */
   const existing = await readJson<any>("watch_for_url", [target]);
   if (existing?.active) throw new Error(`already_watched:${existing.id}`);
   const { fee } = await readStats();
@@ -364,16 +306,9 @@ export async function topUpWatch(opts: { address: `0x${string}`; watchId: number
   });
 }
 
-/** Close a watch; whatever it still holds goes back to its owner, who is the caller. */
+/** Close a watch; whatever it still holds goes back to its owner. */
 export async function closeWatch(opts: { address: `0x${string}`; watchId: number } & Staged): Promise<string> {
-  return send({
-    ...opts,
-    functionName: "close_watch",
-    args: [opts.watchId],
-    value: 0n,
-    what: "Closing this watch",
-    payee: opts.address,
-  });
+  return send({ ...opts, functionName: "close_watch", args: [opts.watchId], value: 0n, what: "Closing this watch" });
 }
 
 /** Put one question to the network about two captures of the same page. */
@@ -418,13 +353,21 @@ export async function notarizeContracts(
  * with parameters has no single answer to record, and a write would change
  * the thing being observed.
  */
-export async function contractViewMethods(address: string): Promise<string[]> {
+export async function contractViewMethods(address: string, attempts = 3): Promise<string[]> {
   const client = readClient();
-  const schema: any = await retried(() => client.getContractSchema(getAddress(address.toLowerCase())) as Promise<any>, 3, 800);
-  const methods = schema?.methods ?? {};
-  return Object.keys(methods)
-    .filter((name) => methods[name]?.readonly === true && (methods[name]?.params ?? []).length === 0 && !name.startsWith("_"))
-    .sort();
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      const schema: any = await client.getContractSchema(getAddress(address.toLowerCase()));
+      const methods = schema?.methods ?? {};
+      return Object.keys(methods)
+        .filter((name) => methods[name]?.readonly === true && (methods[name]?.params ?? []).length === 0 && !name.startsWith("_"))
+        .sort();
+    } catch (e) {
+      if (!isTransientRpc(e) || i === attempts) throw e;
+      await new Promise((r) => setTimeout(r, 800 * i));
+    }
+  }
+  return [];
 }
 
 /** The contract's refusals are sentences written to be read, so they are shown as they are. */
@@ -435,12 +378,11 @@ export function readableError(e: any): string {
   const watched = /already_watched:(\d+)/.exec(raw);
   if (watched) return `That page is already watched, as watch ${watched[1]}. Its owner can top that one up.`;
   if (/not_deployed/.test(raw)) return "This site is not pointed at a Standing contract yet.";
-  if (/no_agreement/.test(raw)) return "The validators did not agree on this, so nothing was recorded.";
   if (/capture_not_found|watch_not_found|assessment_not_found/.test(raw)) {
     return "The transaction went through, but the new record could not be read back yet. Reload in a moment.";
   }
   if (/insufficient funds|insufficient balance/i.test(raw)) {
-    return "This account does not hold enough GEN for the price and the fee deposit. The Get 100 GEN button at the top of the page adds test GEN.";
+    return `This account does not hold enough GEN for the price. Testnet GEN comes from ${FAUCET_URL}`;
   }
   const quoted = /UserError\(?['"]?(.+?)['"]?\)?$/.exec(raw);
   const text = quoted ? quoted[1] : raw;

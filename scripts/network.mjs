@@ -1,49 +1,53 @@
 /**
- * The GenLayer network the scripts talk to: Studio Next.
+ * Which GenLayer network the scripts talk to.
  *
- * Shared by deploy, verify, match and tx, so the chain is named the same way
- * everywhere and printed by every one of them. A contract address means
- * nothing without its network: an address read against the wrong chain
- * reports "contract not found", which looks exactly like a failed deployment
- * unless the tool says which chain it just asked.
- *
- * Studio Next is the SDK's studioDevnet: studio-next.genlayer.com and
- * studio-dev.genlayer.com are one network, chain 61997. The organisers name
- * the first, so its RPC is pinned here, and so is the explorer, which the SDK
- * leaves unset for this network. lib/chain.ts pins the same two.
+ * Shared by deploy, check and tx so that a --network flag means the same thing
+ * everywhere, and so that the name of the chain is printed by every one of them.
+ * A contract address is meaningless without the network it lives on: reading a
+ * Bradbury address against Asimov reports "contract not found", which is
+ * indistinguishable from a failed deployment unless the tool says which chain
+ * it just asked.
  */
-import { studioDevnet } from "genlayer-js/chains";
+import { studionet, testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 
-const STUDIO_NEXT = {
-  ...studioDevnet,
-  name: "GenLayer Studio Next",
-  rpcUrls: { default: { http: ["https://studio-next.genlayer.com/api"] } },
+export const NETWORKS = {
+  bradbury: testnetBradbury,
+  asimov: testnetAsimov,
+  studio: studionet,
 };
-
-export const NETWORKS = { "studio-next": STUDIO_NEXT };
-
-const EXPLORERS = { "studio-next": "https://explorer-studio-dev.genlayer.com/" };
 
 export const NETWORK_NAMES = Object.keys(NETWORKS);
 
+/* Studio's chain definition names an explorer host that answers 503. The one
+ * that serves Studio transactions is pinned here instead, as it is in
+ * lib/chain.ts, so a printed link and a link on the site agree. */
+const EXPLORERS = { studio: "https://explorer-studio.genlayer.com/" };
+
 /**
- * Reads --network=NAME from argv, defaulting to studio-next.
- * Returns { name, chain, explorer, rpc }.
+ * Reads --network=NAME from argv, defaulting to studio, where the contract is
+ * deployed.
+ * Returns { name, chain, explorer, rpc } or throws a plain Error naming the
+ * valid options - the callers all turn that into their own tidy message.
  */
 export function pickNetwork(argv = process.argv) {
   const hit = argv.find((a) => a.startsWith("--network="));
-  const name = hit ? hit.slice("--network=".length) : "studio-next";
+  const name = hit ? hit.slice("--network=".length) : "studio";
 
   const chain = NETWORKS[name];
   if (!chain) {
-    /* Exits rather than throwing. This runs at module load in every script,
-     * before any rpc connection exists, so there are no open handles for
-     * process.exit to trip over, and a thrown error here surfaced as a node
-     * stack trace burying the one line that says what to type instead. */
+    /* Exits rather than throwing. This runs at module load in all three
+     * scripts, before any rpc connection exists, so there are no open handles
+     * for process.exit to trip over - and a thrown error here surfaced as a
+     * node stack trace burying the one line that says what to type instead. */
     console.error(`\n  Unknown --network=${name}`);
     console.error(`  Valid values: ${NETWORK_NAMES.join(", ")}\n`);
     process.exit(1);
   }
 
-  return { name, chain, explorer: EXPLORERS[name], rpc: chain.rpcUrls.default.http[0] };
+  return {
+    name,
+    chain,
+    explorer: EXPLORERS[name] ?? (chain.blockExplorers?.default?.url ?? "").replace(/\/?$/, "/"),
+    rpc: chain.rpcUrls.default.http[0],
+  };
 }

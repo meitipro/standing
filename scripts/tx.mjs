@@ -1,6 +1,6 @@
 /**
- * Look up a transaction on Studio Next and, for a deployment, dig the
- * contract address out of it.
+ * Look up a transaction on Bradbury and, for a deployment, dig the contract
+ * address out of it.
  *
  *   node scripts/tx.mjs 0xTXHASH
  *   npm run tx -- 0xTXHASH

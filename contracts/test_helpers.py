@@ -33,11 +33,9 @@ AS_JSON = "--json" in sys.argv
 
 
 class _UserError(Exception):
-    """Runtime 5jycge4q keeps a refusal's sentence in .data."""
-
-    def __init__(self, data: str = "", /) -> None:
-        super().__init__(data)
-        self.data = data
+    def __init__(self, message: str = "") -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class _VM:
@@ -74,12 +72,7 @@ def load_pure_half() -> dict:
     cut = text.find(MARKER)
     if cut < 0:
         raise SystemExit(f"{SOURCE.name} no longer has a '{MARKER}' banner")
-    # The genlayer imports are blanked rather than deleted, so a traceback
-    # still points at the right line of standing.py.
-    head = "\n".join(
-        "" if line.startswith(("from genlayer", "import genlayer")) else line
-        for line in text[:cut].split("\n")
-    )
+    head = text[:cut].replace("from genlayer import *", "")
     namespace: dict = {"gl": _GL(), "Address": _Address, "__name__": "standing_pure_half"}
     exec(compile(head, str(SOURCE), "exec"), namespace)  # noqa: S102
     return namespace
@@ -104,7 +97,7 @@ def refusal(fn) -> str:
     try:
         fn()
     except _UserError as error:
-        return error.data
+        return error.message
     return ""
 
 
@@ -188,7 +181,7 @@ def url_outcome(raw: str) -> dict:
     try:
         return {"input": raw, "ok": True, "url": M["_check_url"](raw), "refusal": None}
     except _UserError as error:
-        return {"input": raw, "ok": False, "url": None, "refusal": REFUSAL_NAME[error.data]}
+        return {"input": raw, "ok": False, "url": None, "refusal": REFUSAL_NAME[error.message]}
 
 
 URLS = [url_outcome(raw) for raw in URL_CASES]
@@ -366,11 +359,6 @@ check("the identical judgment agrees", J({"verdict": "material", "lines": "c1"},
 check("different lines disagree", J({"verdict": "material", "lines": "c2"}, {"verdict": "material", "lines": "c1"}), False)
 check("an extra key disagrees", J({"verdict": "unclear", "lines": "", "why": ""}, {"verdict": "unclear", "lines": ""}), False)
 check("a non-string value disagrees", J({"verdict": "unclear", "lines": []}, {"verdict": "unclear", "lines": ""}), False)
-
-F = M["_same_refusal"]
-check("the same refusal is agreement", F(_UserError("x"), _UserError("x")), True)
-check("a different refusal is not", F(_UserError("x"), _UserError("y")), False)
-check("a leader that answered does not agree with a refusal", F({"claims": "a\nb", "match": "yes"}, _UserError("x")), False)
 
 check("the diff is two sorted sets", M["_diff"](["b", "a", "k"], ["k", "d", "c"]), (["a", "b"], ["c", "d"]))
 check(

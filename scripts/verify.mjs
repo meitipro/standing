@@ -1,7 +1,7 @@
 /**
  * Read a deployed contract and report whether it is Standing.
  *
- *   npm run verify -- 0xCONTRACT
+ *   npm run verify -- 0xCONTRACT --network=studio
  *
  * Read only: it signs nothing, needs no key and spends nothing, so it is safe
  * to point at any address. Worth running before an address goes into Vercel,
@@ -42,7 +42,7 @@ async function stats(client, attempts = 4) {
 }
 
 if (!address) {
-  console.error("\n  Usage: npm run verify -- 0xCONTRACT");
+  console.error("\n  Usage: npm run verify -- 0xCONTRACT --network=studio");
   console.error("  A contract address is 0x followed by 40 hex characters.\n");
   process.exitCode = 1;
 } else {

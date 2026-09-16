@@ -28,28 +28,18 @@ FEE = 4 * GEN // 10
 
 
 def load(gl: D.GL) -> types.ModuleType:
-    """
-    Publish a `genlayer` package shaped like runtime 5jycge4q, which Studio Next
-    runs: the package itself is `gl`, the star import brings Address and the
-    integer types, and the storage names live in genlayer.storage. An import
-    the contract makes that this runtime lacks fails here, not on chain.
-    """
-    storage = types.ModuleType("genlayer.storage")
-    storage.DynArray = D.DynArray
-    storage.TreeMap = D.TreeMap
-    storage.allow = D.allow_storage
     module = types.ModuleType("genlayer")
-    for name in ("vm", "public", "message", "nondet", "contract"):
-        setattr(module, name, getattr(gl, name))
-    module.storage = storage
+    module.gl = gl
     module.Address = D.Address
     module.u8 = D.u8
     module.u32 = D.u32
     module.u64 = D.u64
     module.u256 = D.u256
-    module.__all__ = ["Address", "u8", "u32", "u64", "u256"]
+    module.DynArray = D.DynArray
+    module.TreeMap = D.TreeMap
+    module.allow_storage = D.allow_storage
+    module.__all__ = ["gl", "Address", "u8", "u32", "u64", "u256", "DynArray", "TreeMap", "allow_storage"]
     sys.modules["genlayer"] = module
-    sys.modules["genlayer.storage"] = storage
     spec = importlib.util.spec_from_file_location("standing_under_test", CONTRACT)
     loaded = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(loaded)
@@ -114,7 +104,7 @@ class World:
         try:
             self.call(method, *args, who=who, value=value)
         except D.UserError as error:
-            return error.data
+            return error.message
         raise AssertionError(f"{method}{args} was expected to refuse and did not")
 
     def view(self, method: str, *args):

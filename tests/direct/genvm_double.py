@@ -15,11 +15,11 @@ network fails:
   copy of a page and ask their own model, so a contract that assumes every
   node sees identical bytes fails here the way it would on chain.
 
-  run_nondet behaves as runtime 5jycge4q's does. The validator is handed the
-  leader's result as it came back, a Return or a UserError, and its bool is
-  its vote; a validator that raises votes against. The leader's result has to
-  be a flat dict of strings, which on a node is enforced outside the contract
-  by the calldata encoder.
+  run_nondet behaves as the SDK's does. The validator runs sandboxed. A
+  refusal agrees with a refusal only when the messages match, a validator that
+  answers differently in kind disagrees, and the leader's result has to be a
+  flat dict of strings, which on a node is enforced outside the contract by
+  the calldata encoder.
 
 Addresses compare by value and case-insensitively, as twenty raw bytes do. The
 SDK's as_hex returns the checksummed form; this one returns what it was given.
@@ -28,16 +28,15 @@ SDK's as_hex returns the checksummed form; this one returns what it was given.
 from __future__ import annotations
 
 import dataclasses
-import types
 import typing
 
 
 class UserError(Exception):
-    """gl.vm.UserError. On runtime 5jycge4q the sentence is .data; there is no .message."""
+    """gl.vm.UserError."""
 
-    def __init__(self, data: str, /) -> None:
-        super().__init__(data)
-        self.data = data
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class VMError(Exception):
@@ -267,12 +266,17 @@ class _Vm:
             for index in range(1, len(gl.nodes)):
                 gl.current = index
                 try:
-                    vote = validator_fn(leader)
-                except (UserError, VMError):
-                    vote = False
-                if not isinstance(vote, bool):
-                    raise TypeError(f"validator returned a non-bool: {vote!r}")
-                votes.append(vote)
+                    answer: typing.Any = Return(validator_fn(leader))
+                except UserError as error:
+                    answer = error
+                if type(answer) is not type(leader):
+                    votes.append(False)
+                elif isinstance(answer, Return):
+                    if not isinstance(answer.calldata, bool):
+                        raise TypeError(f"validator returned a non-bool: {answer.calldata!r}")
+                    votes.append(answer.calldata)
+                else:
+                    votes.append(answer.message == leader.message)
         finally:
             gl.in_nondet = False
             gl.current = 0
@@ -382,12 +386,8 @@ class GL:
         self.public = _Public()
         self.message = _Message()
         self.message_raw: dict = {"datetime": "2026-09-15T10:00:00Z", "is_init": True}
-        # The runtime reads the transaction's datetime from message.raw, the
-        # same dict, so a test that moves the clock moves it here too.
-        self.message.raw = self.message_raw
         self.nondet = _Nondet(self)
         self.Contract = Contract
-        self.contract = types.SimpleNamespace(Contract=Contract, get_at=self.get_contract_at)
 
     def node(self) -> Node:
         if not self.in_nondet:

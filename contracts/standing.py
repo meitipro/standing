@@ -1,5 +1,4 @@
-# v0.3.0
-# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """
 Standing: a notary for public web pages and intelligent contracts.
 
@@ -18,9 +17,6 @@ resolved answer exactly.
 """
 
 from genlayer import *
-from genlayer.storage import DynArray, TreeMap, allow as allow_storage
-
-import genlayer as gl
 
 from dataclasses import dataclass
 
@@ -105,8 +101,8 @@ BLOCKED_PREFIXES = ("10.", "127.", "192.168.", "169.254.", "0.")
 # Refusals.
 #
 # Every refusal is a module constant. The ones raised inside the
-# non-deterministic half must be: a validator agrees with a refusal only when
-# it raised the identical message itself. See _same_refusal.
+# non-deterministic half must be: gl.vm.run_nondet agrees with a refusal only
+# when every node raised the identical message.
 # ---------------------------------------------------------------------------
 
 R_URL_EMPTY = "that url is empty or too long"
@@ -376,18 +372,6 @@ def _resolve(forward: tuple, reverse: tuple) -> dict:
 def _same_judgment(theirs, mine: dict) -> bool:
     """Agreement on an assessment: the leader's resolved answer, exactly."""
     return _flat(theirs, ("verdict", "lines")) and theirs == mine
-
-
-def _same_refusal(leader_res, error) -> bool:
-    """
-    Agreement on a refusal: the leader refused too, with the same sentence.
-
-    gl.vm.run_nondet hands a validator the leader's result as it came back and
-    counts a validator that raises as a vote against. So a page blocked for
-    every node would end as a disagreement with nothing to show the caller,
-    unless the validator says in code that the same refusal is agreement.
-    """
-    return isinstance(leader_res, gl.vm.UserError) and leader_res.data == error.data
 
 
 def _diff(before: list, after: list) -> tuple:
@@ -682,7 +666,7 @@ class Assessment:
     requester: Address
 
 
-class Standing(gl.contract.Contract):
+class Standing(gl.Contract):
     #: May set the fee, withdraw earned fees and hand over ownership. Cannot
     #: touch a certificate, a watch or anyone's prepay.
     owner: Address
@@ -717,7 +701,7 @@ class Standing(gl.contract.Contract):
     # -- deterministic helpers ------------------------------------------------
 
     def _now(self) -> str:
-        text = str(gl.message.raw["datetime"]).strip().replace(" ", "T")
+        text = str(gl.message_raw["datetime"]).strip().replace(" ", "T")
         if text.endswith("Z"):
             text = text[:-1]
         if len(text) < 19:
@@ -748,7 +732,7 @@ class Standing(gl.contract.Contract):
 
     def _pay(self, to: Address, amount: int) -> None:
         # on="finalized" is the default: records may act on acceptance, coins wait.
-        gl.contract.get_at(to).emit_transfer(value=u256(amount))
+        gl.get_contract_at(to).emit_transfer(value=u256(amount))
 
     def _record(self, url: str, kind: str, claims: list, cloaking: bool, watch_id: int) -> int:
         first = len(self.claim_text)
@@ -783,10 +767,10 @@ class Standing(gl.contract.Contract):
         """
         One page capture, agreed.
 
-        The leader proposes its claims. A validator reads the page itself
-        first: if it refuses, it agrees only with a leader that refused with
-        the same sentence. Otherwise it confirms each proposed claim against
-        its own copy and agrees only if it finds them all. Nothing here reads storage: the closures carry
+        The leader proposes its claims. A validator reads the page itself,
+        which surfaces the same refusal the leader would have raised, then
+        confirms each proposed claim against its own copy and agrees only if
+        it finds them all. Nothing here reads storage: the closures carry
         plain values to every node.
         """
         target = url
@@ -797,11 +781,8 @@ class Standing(gl.contract.Contract):
             return {"claims": "\n".join(claims), "match": match}
 
         def validator_fn(leader_res) -> bool:
-            try:
-                text, shot = _read_page(target)
-                mine = _extract(text, shot)
-            except gl.vm.UserError as error:
-                return _same_refusal(leader_res, error)
+            text, shot = _read_page(target)
+            mine = _extract(text, shot)
             if not isinstance(leader_res, gl.vm.Return):
                 return False
             claims = _proposal_claims(leader_res.calldata, mine[1])
@@ -830,10 +811,7 @@ class Standing(gl.contract.Contract):
             return _resolve(_read_answer(forward, count), _read_answer(reverse, count))
 
         def validator_fn(leader_res) -> bool:
-            try:
-                mine = leader_fn()
-            except gl.vm.UserError as error:
-                return _same_refusal(leader_res, error)
+            mine = leader_fn()
             if not isinstance(leader_res, gl.vm.Return):
                 return False
             return _same_judgment(leader_res.calldata, mine)
@@ -870,7 +848,7 @@ class Standing(gl.contract.Contract):
         for i in range(len(targets)):
             address = _parse_address(targets[i])
             names = _check_methods(str(method_sets[i]).split(","))
-            proxy = gl.contract.get_at(address).view()
+            proxy = gl.get_contract_at(address).view()
             lines = []
             for name in names:
                 try:
